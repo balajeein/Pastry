@@ -40,8 +40,7 @@ public class PasteService {
     }
     
     public func isAccessibilityPermissionGranted() -> Bool {
-        let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: false] as CFDictionary
-        return AXIsProcessTrustedWithOptions(options)
+        return AXIsProcessTrusted()
     }
     
     public func requestAccessibilityPermission() {

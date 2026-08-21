@@ -226,6 +226,12 @@ struct GeneralSettingsTab: View {
             }
         }
         .padding()
+        .onAppear {
+            self.hasAccessibility = PasteService.shared.isAccessibilityPermissionGranted()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            self.hasAccessibility = PasteService.shared.isAccessibilityPermissionGranted()
+        }
         .onReceive(timer) { _ in
             self.hasAccessibility = PasteService.shared.isAccessibilityPermissionGranted()
         }
