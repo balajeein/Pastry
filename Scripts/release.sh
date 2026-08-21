@@ -1,19 +1,23 @@
 #!/bin/bash
 # ──────────────────────────────────────────────────────────────
-# Scripts/release.sh — Production Release Pipeline for Pastry
+# Scripts/release.sh — Public Production Release Pipeline for Pastry
 #
-# Complete release workflow:
-# 1. Validates Git working tree clean state (pass --skip-git-check to bypass)
-# 2. Reads VERSION file (MARKETING_VERSION and BUILD_NUMBER)
-# 3. Performs clean optimized release build
-# 4. Injects version metadata into Info.plist
-# 5. Signs with "Developer ID Application" + Hardened Runtime + Entitlements
-#    (or falls back to local signing if Developer ID is not configured)
-# 6. Verifies code signing strictly
-# 7. Packages build/Pastry.dmg
-# 8. Submits to Apple Notary Service via xcrun notarytool (if credentials configured)
-# 9. Staples notarization ticket to DMG
-# 10. Outputs final distribution artifact: build/Pastry.dmg
+# Strict Public Release Workflow:
+# 1. Validates Git working tree clean state (or --skip-git-check)
+# 2. Validates VERSION source of truth file exists
+# 3. Validates Info.plist bundle identifier == com.balajee.Pastry
+# 4. Validates required entitlements file exists
+# 5. REQUIRES a valid "Developer ID Application" certificate in Keychain
+#    (FAILS IMMEDIATELY if missing — does NOT fall back to local dev cert)
+# 6. Performs clean optimized release build (-O)
+# 7. Injects MARKETING_VERSION and BUILD_NUMBER into Info.plist
+# 8. Signs with Developer ID Application + Hardened Runtime + Entitlements
+# 9. Verifies code signature strictly (codesign --verify, codesign -dv)
+# 10. Packages build/Pastry.dmg (with drag-and-drop Applications shortcut)
+# 11. Signs build/Pastry.dmg with Developer ID Application
+# 12. Submits to Apple Notary Service via xcrun notarytool
+# 13. Staples notarization ticket (xcrun stapler staple)
+# 14. Outputs final verified public release artifact: build/Pastry.dmg
 # ──────────────────────────────────────────────────────────────
 set -euo pipefail
 
@@ -25,6 +29,7 @@ DMG_FILE="$BUILD_DIR/Pastry.dmg"
 MACOS_DIR="$APP_BUNDLE/Contents/MacOS"
 RESOURCES_DIR="$APP_BUNDLE/Contents/Resources"
 ENTITLEMENTS="$PROJECT_DIR/Pastry/Resources/Pastry.entitlements"
+INFO_PLIST_SRC="$PROJECT_DIR/Pastry/Resources/Info.plist"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -40,46 +45,82 @@ for arg in "$@"; do
     fi
 done
 
-echo -e "${CYAN}${BOLD}🚀 Starting Pastry Production Release Workflow${NC}\n"
+echo -e "${CYAN}${BOLD}🚀 Pastry Public Production Release Pipeline${NC}\n"
 
-# ── 1. Validate Git Working Tree ─────────────────────────────
+# ── 1. Validate Version File ──────────────────────────────────
+VERSION_FILE="$PROJECT_DIR/VERSION"
+if [ ! -f "$VERSION_FILE" ]; then
+    echo -e "${RED}✘  VERSION file missing at $VERSION_FILE${NC}"
+    exit 1
+fi
+
+MARKETING_VERSION="1.0.0"
+BUILD_NUMBER="1"
+source "$VERSION_FILE" 2>/dev/null || true
+
+echo -e "${CYAN}📌 Target Release: Pastry v${MARKETING_VERSION} (Build ${BUILD_NUMBER})${NC}"
+
+# ── 2. Validate Bundle Identifier ─────────────────────────────
+BUNDLE_ID=$(plutil -extract CFBundleIdentifier raw "$INFO_PLIST_SRC" 2>/dev/null || grep -A1 "CFBundleIdentifier" "$INFO_PLIST_SRC" | tail -n1 | sed -E 's/.*<string>(.*)<\/string>.*/\1/' | tr -d ' \t')
+if [ "$BUNDLE_ID" != "com.balajee.Pastry" ]; then
+    echo -e "${RED}✘  Invalid bundle identifier: '$BUNDLE_ID' (expected 'com.balajee.Pastry')${NC}"
+    exit 1
+fi
+
+# ── 3. Validate Entitlements File ─────────────────────────────
+if [ ! -f "$ENTITLEMENTS" ]; then
+    echo -e "${RED}✘  Missing entitlements file at $ENTITLEMENTS${NC}"
+    exit 1
+fi
+
+# ── 4. Validate Git Working Tree ─────────────────────────────
 if [ "$SKIP_GIT_CHECK" = false ]; then
     if [ -d "$PROJECT_DIR/.git" ]; then
         if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
             echo -e "${RED}✘  Git working tree contains uncommitted changes.${NC}"
-            echo -e "   Please commit or stash changes before releasing, or pass ${CYAN}--skip-git-check${NC}."
+            echo -e "   Commit or stash changes before releasing, or pass ${CYAN}--skip-git-check${NC}."
             exit 1
         fi
-        echo -e "${GREEN}✅ Git working tree is clean.${NC}"
+        echo -e "${GREEN}✅ Git working tree clean.${NC}"
     fi
 else
     echo -e "${YELLOW}⚠️  Skipping Git working tree check (--skip-git-check).${NC}"
 fi
 
-# ── 2. Read Version Source of Truth ───────────────────────────
-VERSION_FILE="$PROJECT_DIR/VERSION"
-MARKETING_VERSION="1.0.0"
-BUILD_NUMBER="1"
+# ── 5. REQUIRE Developer ID Application Certificate ───────────
+echo -e "${CYAN}🔑 Checking Developer ID Application certificate…${NC}"
+DEV_ID=$(security find-identity -v -p codesigning 2>/dev/null | grep "Developer ID Application" | head -n 1 | sed -E 's/.*"([^"]+)".*/\1/' || true)
 
-if [ -f "$VERSION_FILE" ]; then
-    source "$VERSION_FILE" 2>/dev/null || true
+if [ -z "$DEV_ID" ]; then
+    echo -e "\n${RED}${BOLD}Developer ID Application certificate is required for public release.${NC}"
+    echo -e "${YELLOW}Pastry Dev certificate is for local development only and cannot be used for public releases.${NC}"
+    echo -e "To configure Apple Developer ID:"
+    echo -e "  1. Join Apple Developer Program (https://developer.apple.com)"
+    echo -e "  2. Download & install 'Developer ID Application' certificate into Mac Keychain"
+    echo -e "  3. Re-run ./release.sh\n"
+    echo -e "For local testing without Developer ID, use:"
+    echo -e "  ${CYAN}./build.sh${NC}        (creates local release build/Pastry.app)"
+    echo -e "  ${CYAN}./package-dmg.sh${NC}  (creates local testing build/Pastry.dmg)\n"
+    exit 1
 fi
 
-echo -e "${CYAN}📌 Target Release: Pastry v${MARKETING_VERSION} (Build ${BUILD_NUMBER})${NC}"
+echo -e "${GREEN}✅ Found Developer ID Application: '${DEV_ID}'${NC}"
 
-# ── 3. Clean & Build Optimized Binary ─────────────────────────
-echo -e "${CYAN}🔨 Compiling release binary…${NC}"
+# ── 6. Clean Build Directory ──────────────────────────────────
+echo -e "${CYAN}🧹 Cleaning release build artifacts…${NC}"
 rm -rf "$BUILD_DIR"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 
+# ── 7. Compile Release Binary ─────────────────────────────────
+echo -e "${CYAN}🔨 Compiling release binary (optimized -O)…${NC}"
 xcrun swiftc \
     -swift-version 5 \
     -O \
     -o "$MACOS_DIR/Pastry" \
     $(find "$PROJECT_DIR/Pastry" "$PROJECT_DIR/PastryApp" -name "*.swift")
 
-# ── 4. Inject Metadata into Info.plist ───────────────────────
-cp "$PROJECT_DIR/Pastry/Resources/Info.plist" "$APP_BUNDLE/Contents/Info.plist"
+# ── 8. Inject Metadata into Info.plist ───────────────────────
+cp "$INFO_PLIST_SRC" "$APP_BUNDLE/Contents/Info.plist"
 plutil -replace CFBundleShortVersionString -string "$MARKETING_VERSION" "$APP_BUNDLE/Contents/Info.plist"
 plutil -replace CFBundleVersion -string "$BUILD_NUMBER" "$APP_BUNDLE/Contents/Info.plist"
 
@@ -87,78 +128,58 @@ if [ -f "$PROJECT_DIR/Pastry/Resources/AppIcon.icns" ]; then
     cp "$PROJECT_DIR/Pastry/Resources/AppIcon.icns" "$RESOURCES_DIR/AppIcon.icns"
 fi
 
-# ── 5. Code Signing (Developer ID vs Local) ───────────────────
-DEV_ID=$(security find-identity -v -p codesigning 2>/dev/null | grep "Developer ID Application" | head -n 1 | sed -E 's/.*"([^"]+)".*/\1/' || true)
+# ── 9. Code Sign with Developer ID & Hardened Runtime ─────────
+echo -e "${CYAN}🔑 Signing Pastry.app with Developer ID Application + Hardened Runtime…${NC}"
+codesign -s "$DEV_ID" \
+    --force \
+    --deep \
+    --options runtime \
+    --entitlements "$ENTITLEMENTS" \
+    "$APP_BUNDLE"
 
-IS_DEVELOPER_ID=false
-if [ -n "$DEV_ID" ]; then
-    IS_DEVELOPER_ID=true
-    echo -e "${CYAN}🔑 Signing with Developer ID: '${DEV_ID}' (Hardened Runtime enabled)…${NC}"
-    codesign -s "$DEV_ID" \
-        --force \
-        --deep \
-        --options runtime \
-        --entitlements "$ENTITLEMENTS" \
-        "$APP_BUNDLE"
-else
-    echo -e "${YELLOW}⚠️  Developer ID Application certificate NOT found in Keychain.${NC}"
-    echo -e "   Falling back to local 'Pastry Dev' signing for testing build."
-    if security find-identity -v -p codesigning 2>/dev/null | grep -q "Pastry Dev"; then
-        codesign -s "Pastry Dev" --force --deep "$APP_BUNDLE" 2>/dev/null
-    else
-        codesign -s - --force --deep "$APP_BUNDLE" 2>/dev/null
-    fi
+# ── 10. Strict Code Signature Verification ────────────────────
+echo -e "${CYAN}🔍 Performing strict signature verification…${NC}"
+codesign --verify --deep --strict --verbose "$APP_BUNDLE"
+codesign -dv --verbose=4 "$APP_BUNDLE" 2>&1 | grep -E "Authority|Identifier|TeamIdentifier|Sealed Resources"
+
+# Confirm signature authority is Developer ID
+if ! codesign -dv "$APP_BUNDLE" 2>&1 | grep -q "Developer ID Application"; then
+    echo -e "${RED}✘  Signing verification failed: Certificate is not Developer ID Application.${NC}"
+    exit 1
 fi
+echo -e "${GREEN}✅ Code signature verified strictly.${NC}"
 
-# ── 6. Verify Code Signature ──────────────────────────────────
-echo -e "${CYAN}🔍 Verifying code signature…${NC}"
-codesign --verify --deep --strict "$APP_BUNDLE"
-echo -e "${GREEN}✅ Code signature verified.${NC}"
-
-# ── 7. Package DMG ────────────────────────────────────────────
+# ── 11. Package DMG ───────────────────────────────────────────
 "$SCRIPT_DIR/package-dmg.sh"
 
-# If signed with Developer ID, also sign the DMG container
-if [ "$IS_DEVELOPER_ID" = true ]; then
-    echo -e "${CYAN}🔑 Signing DMG with Developer ID…${NC}"
-    codesign -s "$DEV_ID" "$DMG_FILE"
-fi
+echo -e "${CYAN}🔑 Signing Pastry.dmg container with Developer ID…${NC}"
+codesign -s "$DEV_ID" "$DMG_FILE"
 
-# ── 8. Notarization & Stapling ────────────────────────────────
-echo -e "\n${CYAN}🌐 Checking Apple Notarization Setup…${NC}"
+# ── 12. Apple Notarization & Stapling ─────────────────────────
+echo -e "\n${CYAN}🌐 Submitting to Apple Notary Service (xcrun notarytool)…${NC}"
 
 NOTARY_KEYCHAIN_PROFILE="${NOTARY_KEYCHAIN_PROFILE:-AC_PASSWORD}"
-HAS_NOTARY_CREDS=false
 
-if xcrun notarytool history --keychain-profile "$NOTARY_KEYCHAIN_PROFILE" >/dev/null 2>&1; then
-    HAS_NOTARY_CREDS=true
+if ! xcrun notarytool history --keychain-profile "$NOTARY_KEYCHAIN_PROFILE" >/dev/null 2>&1; then
+    echo -e "\n${RED}${BOLD}Notarization credentials profile '$NOTARY_KEYCHAIN_PROFILE' not found in Keychain.${NC}"
+    echo -e "To configure notarytool credentials:"
+    echo -e "  ${CYAN}xcrun notarytool store-credentials \"$NOTARY_KEYCHAIN_PROFILE\" --apple-id \"your-apple-id@example.com\" --team-id \"YOUR_TEAM_ID\"${NC}\n"
+    exit 1
 fi
 
-if [ "$IS_DEVELOPER_ID" = true ] && [ "$HAS_NOTARY_CREDS" = true ]; then
-    echo -e "${CYAN}📤 Submitting $DMG_FILE to Apple Notary Service…${NC}"
-    xcrun notarytool submit "$DMG_FILE" \
-        --keychain-profile "$NOTARY_KEYCHAIN_PROFILE" \
-        --wait
+xcrun notarytool submit "$DMG_FILE" \
+    --keychain-profile "$NOTARY_KEYCHAIN_PROFILE" \
+    --wait
 
-    echo -e "${CYAN}📎 Stapling notarization ticket…${NC}"
-    xcrun stapler staple "$DMG_FILE"
-    xcrun stapler staple "$APP_BUNDLE"
-    echo -e "${GREEN}✅ Notarization and stapling complete!${NC}"
-else
-    echo -e "${YELLOW}ℹ️  Apple Notarization skipped.${NC}"
-    if [ "$IS_DEVELOPER_ID" = false ]; then
-        echo -e "   Reason: No 'Developer ID Application' certificate installed."
-    elif [ "$HAS_NOTARY_CREDS" = false ]; then
-        echo -e "   Reason: Keychain profile '$NOTARY_KEYCHAIN_PROFILE' not configured."
-        echo -e "   To enable Notarization:"
-        echo -e "     1. Obtain Apple Developer Program membership"
-        echo -e "     2. Store credentials in Keychain:"
-        echo -e "        ${CYAN}xcrun notarytool store-credentials \"$NOTARY_KEYCHAIN_PROFILE\" --apple-id \"user@example.com\" --team-id \"TEAMID\"${NC}"
-    fi
-fi
+echo -e "${CYAN}📎 Stapling notarization ticket to DMG & App…${NC}"
+xcrun stapler staple "$DMG_FILE"
+xcrun stapler staple "$APP_BUNDLE"
 
-# ── 9. Final Verification & Output ────────────────────────────
-echo -e "\n${GREEN}${BOLD}🎉 Release Package Ready!${NC}"
+echo -e "${CYAN}🔍 Assessing Gatekeeper notarization status…${NC}"
+spctl --assess --type open --context context:primary-signature --verbose "$DMG_FILE"
+
+# ── 13. Final Success Output ──────────────────────────────────
+echo -e "\n${GREEN}${BOLD}🎉 Public Release Package Successfully Created & Notarized!${NC}"
 echo -e "   File: ${BOLD}$DMG_FILE${NC}"
 echo -e "   Size: $(du -h "$DMG_FILE" | cut -f1)"
 echo -e "   Version: v${MARKETING_VERSION} (Build ${BUILD_NUMBER})\n"

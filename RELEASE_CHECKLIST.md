@@ -1,10 +1,28 @@
-# Pastry — v1.0 Product Release Checklist
+# Pastry — Release & Verification Checklist
 
-Use this checklist before publishing a new public release of Pastry.
+Use this checklist to verify Pastry before publishing or testing builds.
 
 ---
 
-## 1. PRE-RELEASE AUDIT & VERIFICATION
+## WORKFLOW OVERVIEW
+
+Pastry uses two distinct build workflows:
+
+### 1. LOCAL TEST BUILD
+- Commands: `./build.sh` followed by `./package-dmg.sh` (or `make app` / `make dmg`)
+- Signature: Local `Pastry Dev` certificate (or ad-hoc)
+- Target: Local feature testing, UI verification, and manual QA
+- Distribution: **NOT FOR PUBLIC DISTRIBUTION**
+
+### 2. PUBLIC PRODUCTION RELEASE
+- Command: `./release.sh` (or `make release`)
+- Signature: **Developer ID Application** + Hardened Runtime + Entitlements
+- Notarization: `xcrun notarytool submit` + `xcrun stapler staple`
+- Target: Final public distribution DMG (`build/Pastry.dmg`)
+
+---
+
+## PRE-RELEASE AUDIT & VERIFICATION
 
 ### Core Functionality
 - [ ] **Text Copying**: Plain text, multiline text, unicode, and emojis copy and render cleanly.
@@ -27,55 +45,49 @@ Use this checklist before publishing a new public release of Pastry.
 - [ ] **Instant Search**: Typing filters history immediately; selection resets to top match.
 - [ ] **Dismissal**: Panel closes automatically on loss of focus or when item is selected.
 
-### Menu Bar & Dock
+### Menu Bar & Accessibility Setup
 - [ ] **Menu Bar Only**: Status item displays clipboard icon; app does NOT appear in the Dock or Cmd+Tab switcher.
 - [ ] **Menu Items**: "Open Clipboard", "Pause History", "Clear History", "Settings...", "Quit Pastry" operate cleanly.
-- [ ] **Dark Mode / Light Mode**: Template status icon and visual effect background adjust natively for OS theme.
-
-### Accessibility Permission & Setup
-- [ ] **Permission Status**: Correctly detects granted vs. missing status in Settings.
-- [ ] **UX Guidance**: Explains why Accessibility permission is needed ("Pastry needs Accessibility permission to paste clipboard items...").
-- [ ] **Settings Link**: "Grant Access..." / "Open Settings" opens macOS System Settings → Privacy & Security → Accessibility.
+- [ ] **Accessibility UX**: Clear message ("Pastry needs Accessibility permission to paste clipboard items into the application you're currently using.") and direct link to macOS Settings.
 - [ ] **Local Signing**: `setup-signing.sh` certificate identity preserves Accessibility across `./dev.sh` rebuilds.
 
-### Code & Metadata Audit
-- [ ] **No Secrets**: No private keys, passwords, or notarization credentials committed to Git.
-- [ ] **No Debug Code**: No dummy test buttons, debug logs, or fake fallbacks.
-- [ ] **Version Number**: `VERSION` file updated with target `MARKETING_VERSION` (e.g. `1.0.0`) and `BUILD_NUMBER` (e.g. `1`).
-- [ ] **Git Working Tree**: Clean working tree (`git status`).
+### Versioning & Metadata Audit
+- [ ] **Single Version Source**: `VERSION` file updated with `MARKETING_VERSION` (e.g. `1.0.0`) and `BUILD_NUMBER` (e.g. `1`).
+- [ ] **Metadata**: `CFBundleIdentifier` is `com.balajee.Pastry`, `LSUIElement` is `true`.
+- [ ] **Git Working Tree**: Working tree is clean (`git status`).
 
 ---
 
-## 2. RELEASE BUILD & NOTARIZATION
+## PUBLIC RELEASE EXECUTION (`./release.sh`)
 
-- [ ] **Run Release Script**:
+- [ ] **Developer ID Certificate**: `Developer ID Application` certificate installed in Keychain.
+- [ ] **Notarization Profile**: Keychain profile `AC_PASSWORD` configured (`xcrun notarytool store-credentials`).
+- [ ] **Run Pipeline**:
   ```bash
   ./release.sh
   ```
-- [ ] **Build Verification**: Optimized release binary compiled successfully in `build/Pastry.app`.
-- [ ] **Developer ID Signature**: Verified with `codesign --verify --deep --strict build/Pastry.app`.
-- [ ] **Hardened Runtime**: Enabled (`--options runtime`).
-- [ ] **Entitlements**: `Pastry/Resources/Pastry.entitlements` applied.
-- [ ] **DMG Package**: `build/Pastry.dmg` created with drag-and-drop Applications shortcut.
-- [ ] **Apple Notarization**: Submitted via `xcrun notarytool submit` and approved.
-- [ ] **Staple Ticket**: Ticket stapled using `xcrun stapler staple build/Pastry.dmg`.
+- [ ] **Build Verification**: Clean release build compiled with `-O`.
+- [ ] **Code Signature Verification**:
+  ```bash
+  codesign --verify --deep --strict build/Pastry.app
+  codesign -dv --verbose=4 build/Pastry.app
+  ```
+- [ ] **Hardened Runtime**: Verified enabled.
+- [ ] **Entitlements**: `Pastry/Resources/Pastry.entitlements` verified applied.
+- [ ] **DMG Packaging**: `build/Pastry.dmg` created containing `Pastry.app` and Applications symlink.
+- [ ] **Notarization**: `xcrun notarytool submit` completed cleanly.
+- [ ] **Stapling**: `xcrun stapler staple build/Pastry.dmg` completed.
+- [ ] **Gatekeeper Assessment**: `spctl --assess --type open --verbose build/Pastry.dmg` returns accepted.
 
 ---
 
-## 3. GIT TAGGING & DISTRIBUTION
+## GIT TAGGING & DISTRIBUTION
 
 - [ ] **Create Git Version Tag**:
   ```bash
   git tag -a v1.0.0 -m "Pastry v1.0.0 Release"
+  git push origin main
   git push origin v1.0.0
   ```
 - [ ] **Create GitHub Release**: Attach `build/Pastry.dmg`.
-- [ ] **Clean Test**: Download DMG on a clean Mac / user account, drag to Applications, launch, grant Accessibility, and verify core workflow.
-
----
-
-## 4. POST-RELEASE VERIFICATION
-
-- [ ] **Fresh Installation**: Verify application launches without Gatekeeper warnings.
-- [ ] **First Launch Alert**: Welcome alert displays correctly on initial launch.
-- [ ] **Persistence**: Copying items, quitting app, and reopening restores saved history.
+- [ ] **Download Test**: Download DMG on a clean Mac / user account, drag to Applications, launch, grant Accessibility, and verify core workflow.
