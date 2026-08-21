@@ -6,12 +6,16 @@
     <string>com.balajee.Pastry</string>
     <key>CFBundleName</key>
     <string>Pastry</string>
+    <key>CFBundleDisplayName</key>
+    <string>Pastry</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0</string>
+    <string>1.0.0</string>
     <key>CFBundleVersion</key>
     <string>1</string>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.utilities</string>
     <key>LSUIElement</key>
     <true/>
     <key>NSPrincipalClass</key>
@@ -20,5 +24,7 @@
     <true/>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
+    <key>NSHumanReadableCopyright</key>
+    <string>Copyright © 2026. All rights reserved.</string>
 </dict>
 </plist>

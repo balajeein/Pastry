@@ -44,7 +44,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                 let alert = NSAlert()
                 alert.messageText = "Welcome to Pastry!"
-                alert.informativeText = "Pastry is running silently in your menu bar.\n\nPress ⌘⇧V (Command + Shift + V) at any time to open your clipboard history.\n\nNote: If automatic pasting doesn't work, please grant Accessibility Permission in Settings."
+                alert.informativeText = "Pastry is running silently in your menu bar.\n\nPress ⌘⇧V at any time to open your clipboard history.\n\nNote: Pastry needs Accessibility permission to paste clipboard items into the application you're currently using."
                 alert.alertStyle = .informational
                 alert.addButton(withTitle: "Get Started")
                 alert.addButton(withTitle: "Open Settings")

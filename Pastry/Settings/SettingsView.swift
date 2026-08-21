@@ -219,7 +219,7 @@ struct GeneralSettingsTab: View {
                     .buttonStyle(.bordered)
                 }
                 
-                Text("Accessibility permission is needed to automatically paste the item back into your active window after choosing it.")
+                Text("Pastry needs Accessibility permission to paste clipboard items into the application you're currently using.")
                     .font(.system(size: 10))
                     .foregroundColor(.secondary)
                     .lineLimit(nil)
