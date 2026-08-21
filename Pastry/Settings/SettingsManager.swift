@@ -44,16 +44,19 @@ public class SettingsManager: ObservableObject {
     @Published public var hotKeyCode: UInt32 {
         didSet {
             defaults.set(hotKeyCode, forKey: "hotKeyCode")
-            registerCurrentHotkey()
+            registrationFailed = !GlobalHotkeyManager.shared.registerHotkey(keyCode: hotKeyCode, modifiers: hotKeyModifiers)
         }
     }
     
     @Published public var hotKeyModifiers: UInt32 {
         didSet {
             defaults.set(hotKeyModifiers, forKey: "hotKeyModifiers")
-            registerCurrentHotkey()
+            registrationFailed = !GlobalHotkeyManager.shared.registerHotkey(keyCode: hotKeyCode, modifiers: hotKeyModifiers)
         }
     }
+    
+    /// True when the last hotkey registration attempt failed (e.g. conflict with another app).
+    @Published public var registrationFailed: Bool = false
     
     @Published public var isLaunchAtLogin: Bool {
         didSet {
@@ -80,11 +83,17 @@ public class SettingsManager: ObservableObject {
     }
     
     public func registerCurrentHotkey() {
-        _ = GlobalHotkeyManager.shared.registerHotkey(keyCode: hotKeyCode, modifiers: hotKeyModifiers)
+        registrationFailed = !GlobalHotkeyManager.shared.registerHotkey(keyCode: hotKeyCode, modifiers: hotKeyModifiers)
     }
     
     public var hotKeyDisplayString: String {
         return GlobalHotkeyManager.getHotkeyString(keyCode: hotKeyCode, modifiers: hotKeyModifiers)
+    }
+    
+    /// Restores the built-in default shortcut: ⌘⇧V
+    public func resetToDefault() {
+        hotKeyCode = 9        // V
+        hotKeyModifiers = 768 // cmdKey | shiftKey
     }
     
     private func setLaunchAtLogin(enabled: Bool) {

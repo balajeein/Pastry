@@ -3,67 +3,178 @@ import Carbon
 
 struct ShortcutRecorderView: View {
     @ObservedObject var settings = SettingsManager.shared
-    @State private var isRecording = false
-    @State private var monitor: Any? = nil
-    
+
+    // Recording state
+    @State private var isRecording   = false
+    @State private var liveModifiers = "" // Shows held modifier keys before final key is pressed
+    @State private var monitors: [Any] = []
+
     var body: some View {
-        HStack(spacing: 12) {
-            Text("Global Shortcut:")
-                .font(.system(size: 13))
-            
-            Button(action: {
-                if isRecording {
-                    stopRecording()
-                } else {
-                    startRecording()
-                }
-            }) {
-                Text(isRecording ? "Press combination..." : settings.hotKeyDisplayString)
-                    .frame(minWidth: 120)
-            }
-            .buttonStyle(.bordered)
-            .tint(isRecording ? .accentColor : .secondary)
-            
-            if isRecording {
-                Button(action: { stopRecording() }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(.secondary)
+        VStack(alignment: .leading, spacing: 6) {
+
+            HStack(spacing: 10) {
+                Text("Global Shortcut:")
+                    .font(.system(size: 13))
+
+                // ── Shortcut pill ──────────────────────────────────
+                Button(action: toggleRecording) {
+                    HStack(spacing: 6) {
+                        if isRecording {
+                            Circle()
+                                .fill(Color.red)
+                                .frame(width: 6, height: 6)
+                            Text(liveModifiers.isEmpty ? "Press shortcut…" : "\(liveModifiers) …")
+                                .font(.system(size: 13, weight: .medium, design: .monospaced))
+                                .foregroundColor(.primary)
+                        } else {
+                            Text(settings.hotKeyDisplayString)
+                                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                                .foregroundColor(.primary)
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(isRecording
+                                  ? Color.accentColor.opacity(0.12)
+                                  : Color.primary.opacity(0.07))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(
+                                        isRecording ? Color.accentColor : Color.primary.opacity(0.2),
+                                        lineWidth: 1
+                                    )
+                            )
+                    )
                 }
                 .buttonStyle(.plain)
+                .help(isRecording
+                      ? "Press a key combination, or Escape to cancel"
+                      : "Click to record a new shortcut")
+
+                // Cancel ×
+                if isRecording {
+                    Button(action: stopRecording) {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.secondary)
+                            .font(.system(size: 14))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Cancel")
+                }
+
+                Spacer()
+
+                // Reset to ⌘⇧V
+                Button("Reset to Default") {
+                    stopRecording()
+                    settings.resetToDefault()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(!isRecording &&
+                          settings.hotKeyCode == 9 &&
+                          settings.hotKeyModifiers == 768)
             }
+
+            // Conflict warning
+            if settings.registrationFailed {
+                HStack(spacing: 5) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.orange)
+                        .font(.system(size: 11))
+                    Text("Shortcut conflicts with another app. Try a different combination.")
+                        .font(.system(size: 11))
+                        .foregroundColor(.orange)
+                }
+            }
+
+            // Hint
+            Text(isRecording
+                 ? "Hold ⌘ ⌥ ⌃ ⇧ then press a key. Escape cancels."
+                 : "Click the shortcut pill above to change it. Default: ⌘⇧V")
+                .font(.system(size: 10))
+                .foregroundColor(.secondary)
         }
+        .onDisappear { stopRecording() }
     }
-    
+
+    // MARK: - Actions
+
+    private func toggleRecording() {
+        isRecording ? stopRecording() : startRecording()
+    }
+
     private func startRecording() {
-        isRecording = true
-        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+        isRecording   = true
+        liveModifiers = ""
+
+        // Global monitor — captures keys pressed in OTHER apps while Settings is open
+        let gMon = NSEvent.addGlobalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { ev in
+            handleNSEvent(ev)
+        }
+
+        // Local monitor — captures keys inside our own window (and lets us consume Escape)
+        let lMon = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { ev in
+            handleNSEvent(ev)
+            return nil  // consume so it doesn't reach the text field / other responders
+        }
+
+        var newMonitors: [Any] = []
+        if let g = gMon { newMonitors.append(g) }
+        if let l = lMon { newMonitors.append(l) }
+        monitors = newMonitors
+    }
+
+    private func handleNSEvent(_ event: NSEvent) {
+        // ── flagsChanged: update the live modifier preview ────────
+        if event.type == .flagsChanged {
             let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-            
-            // Require at least one modifier key
-            if flags.isEmpty {
-                return event
-            }
-            
-            var carbonFlags: UInt32 = 0
-            if flags.contains(.command) { carbonFlags |= UInt32(cmdKey) }
-            if flags.contains(.shift) { carbonFlags |= UInt32(shiftKey) }
-            if flags.contains(.option) { carbonFlags |= UInt32(optionKey) }
-            if flags.contains(.control) { carbonFlags |= UInt32(controlKey) }
-            
-            settings.hotKeyCode = UInt32(event.keyCode)
+            var preview = ""
+            if flags.contains(.control) { preview += "⌃" }
+            if flags.contains(.option)  { preview += "⌥" }
+            if flags.contains(.shift)   { preview += "⇧" }
+            if flags.contains(.command) { preview += "⌘" }
+            DispatchQueue.main.async { liveModifiers = preview }
+            return
+        }
+
+        guard event.type == .keyDown else { return }
+
+        // Escape → cancel without changing the shortcut
+        if event.keyCode == 53 {
+            DispatchQueue.main.async { stopRecording() }
+            return
+        }
+
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+
+        // Must include at least ⌘, ⌃, or ⌥ to avoid bare-letter conflicts
+        guard flags.contains(.command) ||
+              flags.contains(.control) ||
+              flags.contains(.option)  else { return }
+
+        // Build Carbon modifier mask
+        var carbonFlags: UInt32 = 0
+        if flags.contains(.command) { carbonFlags |= UInt32(cmdKey) }
+        if flags.contains(.shift)   { carbonFlags |= UInt32(shiftKey) }
+        if flags.contains(.option)  { carbonFlags |= UInt32(optionKey) }
+        if flags.contains(.control) { carbonFlags |= UInt32(controlKey) }
+
+        DispatchQueue.main.async {
+            // SettingsManager.didSet → registers the hotkey + sets registrationFailed
+            settings.hotKeyCode      = UInt32(event.keyCode)
             settings.hotKeyModifiers = carbonFlags
-            
-            self.stopRecording()
-            return nil // Intercept event propagation
+            stopRecording()
         }
     }
-    
+
     private func stopRecording() {
-        isRecording = false
-        if let monitor = monitor {
-            NSEvent.removeMonitor(monitor)
-            self.monitor = nil
-        }
+        isRecording   = false
+        liveModifiers = ""
+        monitors.forEach { NSEvent.removeMonitor($0) }
+        monitors = []
     }
 }
 
