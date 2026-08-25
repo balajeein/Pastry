@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import CryptoKit
 
 public class ClipboardManager: ObservableObject {
     public static let shared = ClipboardManager()
@@ -12,15 +13,20 @@ public class ClipboardManager: ObservableObject {
     
     public func startMonitoring() {
         guard timer == nil else { return }
-        // Poll every 0.5 seconds for changes. This frequency is standard for macOS.
-        timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+        // Poll every 0.25 seconds for changes for responsive clipboard updates.
+        timer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
             self?.checkPasteboard()
         }
+        
+        // Start monitoring for screenshot file creation
+        ScreenshotMonitor.shared.startMonitoring()
     }
     
     public func stopMonitoring() {
         timer?.invalidate()
         timer = nil
+        
+        ScreenshotMonitor.shared.stopMonitoring()
     }
     
     public func writeWithoutMonitoring(_ block: () -> Void) {
@@ -119,13 +125,15 @@ public class ClipboardManager: ObservableObject {
         let characterCount = text.count
         let lineCount = text.components(separatedBy: .newlines).count
         let subtitle = lineCount > 1 ? "\(lineCount) lines, \(characterCount) chars" : "\(characterCount) characters"
+        let calcResult = ExpressionParser.evaluate(text)
         
         let item = ClipboardItem(
             type: .text,
             textContent: text,
             displayTitle: String(displayTitle.prefix(100)),
             subtitle: subtitle,
-            representations: extractRepresentations(from: pasteboard, forTypes: [.string])
+            representations: extractRepresentations(from: pasteboard, forTypes: [.string]),
+            calculationResult: calcResult
         )
         ClipboardStore.shared.add(item: item)
     }
@@ -174,6 +182,9 @@ public class ClipboardManager: ObservableObject {
         DispatchQueue.global(qos: .utility).async {
             guard let paths = ImageStorage.shared.saveImage(data: data, id: id) else { return }
             
+            let digest = SHA256.hash(data: data)
+            let hashString = digest.map { String(format: "%02x", $0) }.joined()
+            
             let sizeDesc = ImageStorage.shared.getImageSizeDescription(path: paths.imagePath) ?? "Image"
             let item = ClipboardItem(
                 id: id,
@@ -181,7 +192,8 @@ public class ClipboardManager: ObservableObject {
                 storagePath: paths.imagePath,
                 displayTitle: "Image",
                 subtitle: sizeDesc,
-                representations: nil // We restore from file path
+                representations: nil,
+                contentHash: hashString
             )
             ClipboardStore.shared.add(item: item)
         }

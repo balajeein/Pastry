@@ -19,7 +19,8 @@ public class ClipboardPanelViewModel: ObservableObject {
         return store.items.filter { item in
             item.displayTitle.localizedCaseInsensitiveContains(searchText) ||
             item.subtitle?.localizedCaseInsensitiveContains(searchText) == true ||
-            item.textContent?.localizedCaseInsensitiveContains(searchText) == true
+            item.textContent?.localizedCaseInsensitiveContains(searchText) == true ||
+            item.calculationResult?.localizedCaseInsensitiveContains(searchText) == true
         }
     }
     
@@ -39,8 +40,24 @@ public class ClipboardPanelViewModel: ObservableObject {
         let items = filteredItems
         guard selectedIndex >= 0 && selectedIndex < items.count else { return }
         let selectedItem = items[selectedIndex]
+        pasteItem(selectedItem, onClose: onClose)
+    }
+    
+    public func pasteItem(_ item: ClipboardItem, onClose: () -> Void) {
         onClose()
-        PasteService.shared.restoreActiveAppAndPaste(item: selectedItem) { _ in }
+        PasteService.shared.restoreActiveAppAndPaste(item: item) { _ in }
+    }
+    
+    public func pasteAnswer(for item: ClipboardItem, onClose: () -> Void) {
+        guard let answer = item.calculationResult else { return }
+        let answerItem = ClipboardItem(
+            type: .text,
+            textContent: answer,
+            displayTitle: answer,
+            subtitle: "Calculated Answer"
+        )
+        onClose()
+        PasteService.shared.restoreActiveAppAndPaste(item: answerItem) { _ in }
     }
 }
 
@@ -109,14 +126,20 @@ public struct ClipboardPanelView: View {
                 ScrollViewReader { proxy in
                     ScrollView(.vertical, showsIndicators: true) {
                         LazyVStack(spacing: 4) {
-                            ForEach(0..<items.count, id: \.self) { idx in
-                                let item = items[idx]
-                                ClipboardRowView(item: item, isSelected: idx == viewModel.selectedIndex)
-                                    .id(idx)
-                                    .onTapGesture {
+                            ForEach(Array(items.enumerated()), id: \.element.id) { idx, item in
+                                ClipboardRowView(
+                                    item: item,
+                                    isSelected: idx == viewModel.selectedIndex,
+                                    onTapLeft: {
                                         viewModel.selectedIndex = idx
-                                        viewModel.selectAndPaste(onClose: onClose)
+                                        viewModel.pasteItem(item, onClose: onClose)
+                                    },
+                                    onTapRight: {
+                                        viewModel.selectedIndex = idx
+                                        viewModel.pasteAnswer(for: item, onClose: onClose)
                                     }
+                                )
+                                .id(idx)
                             }
                         }
                         .padding(6)

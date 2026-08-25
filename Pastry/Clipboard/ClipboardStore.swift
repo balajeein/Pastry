@@ -20,8 +20,12 @@ public class ClipboardStore: ObservableObject {
     }
     
     public func add(item: ClipboardItem) {
-        DispatchQueue.main.async {
+        if Thread.isMainThread {
             self.addItemInternal(item)
+        } else {
+            DispatchQueue.main.async {
+                self.addItemInternal(item)
+            }
         }
     }
     
@@ -45,7 +49,9 @@ public class ClipboardStore: ObservableObject {
                 storagePath: existingItem.storagePath,
                 displayTitle: existingItem.displayTitle,
                 subtitle: existingItem.subtitle,
-                representations: existingItem.representations
+                representations: existingItem.representations,
+                calculationResult: newItem.calculationResult ?? existingItem.calculationResult,
+                contentHash: newItem.contentHash ?? existingItem.contentHash
             )
             items.insert(updatedItem, at: 0)
         } else {
@@ -107,11 +113,19 @@ public class ClipboardStore: ObservableObject {
     }
     
     public func clearHistory() {
-        DispatchQueue.main.async {
+        if Thread.isMainThread {
             self.items.removeAll()
             self.saveHistory()
             self.queue.async {
                 ImageStorage.shared.clearAll()
+            }
+        } else {
+            DispatchQueue.main.async {
+                self.items.removeAll()
+                self.saveHistory()
+                self.queue.async {
+                    ImageStorage.shared.clearAll()
+                }
             }
         }
     }

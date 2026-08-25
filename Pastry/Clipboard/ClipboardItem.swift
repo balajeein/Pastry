@@ -17,6 +17,8 @@ public struct ClipboardItem: Codable, Identifiable, Equatable {
     public let displayTitle: String
     public let subtitle: String?
     public let representations: [String: Data]? // Extracted raw pasteboard data (small sizes only)
+    public let calculationResult: String?
+    public let contentHash: String?
     
     public init(
         id: UUID = UUID(),
@@ -26,7 +28,9 @@ public struct ClipboardItem: Codable, Identifiable, Equatable {
         storagePath: String? = nil,
         displayTitle: String,
         subtitle: String? = nil,
-        representations: [String: Data]? = nil
+        representations: [String: Data]? = nil,
+        calculationResult: String? = nil,
+        contentHash: String? = nil
     ) {
         self.id = id
         self.type = type
@@ -36,6 +40,8 @@ public struct ClipboardItem: Codable, Identifiable, Equatable {
         self.displayTitle = displayTitle
         self.subtitle = subtitle
         self.representations = representations
+        self.calculationResult = calculationResult
+        self.contentHash = contentHash
     }
     
     public static func == (lhs: ClipboardItem, rhs: ClipboardItem) -> Bool {
@@ -45,8 +51,12 @@ public struct ClipboardItem: Codable, Identifiable, Equatable {
         case .text, .url, .file:
             return lhs.textContent == rhs.textContent
         case .image, .other:
-            // For images/others, we compare display title and subtitle or storage paths if available.
-            // If they are exactly the same size/hash (reflected in subtitle or title), they are duplicates.
+            if let h1 = lhs.contentHash, let h2 = rhs.contentHash {
+                return h1 == h2
+            }
+            if let p1 = lhs.storagePath, let p2 = rhs.storagePath, p1 == p2 {
+                return true
+            }
             return lhs.displayTitle == rhs.displayTitle && lhs.subtitle == rhs.subtitle
         }
     }

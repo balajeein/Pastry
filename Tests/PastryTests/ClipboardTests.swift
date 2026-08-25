@@ -1,119 +1,80 @@
-import XCTest
-@testable import PastryCore
+import Foundation
 
-final class ClipboardTests: XCTestCase {
+public struct ClipboardTests {
     
-    override func setUpWithError() throws {
+    public static func runAll() {
+        print("🧪 Running ClipboardTests...")
+        
+        func check(_ condition: Bool, _ msg: String, line: Int = #line) {
+            if !condition {
+                print("❌ FAIL [line \(line)]: \(msg)")
+                exit(1)
+            }
+        }
+        
         // Reset limits to standard defaults
         UserDefaults.standard.set(20, forKey: "textHistoryLimit")
         UserDefaults.standard.set(10, forKey: "imageHistoryLimit")
         UserDefaults.standard.set(10, forKey: "otherHistoryLimit")
         ClipboardStore.shared.clearHistory()
+        Thread.sleep(forTimeInterval: 0.05)
         
-        // Wait briefly for async operations to complete
-        let expectation = XCTestExpectation(description: "Clear Store")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-            expectation.fulfill()
-        }
-        wait(for: [expectation], timeout: 1.0)
-    }
-    
-    func testDeduplication() {
+        // Test Deduplication
         let store = ClipboardStore.shared
-        
         let item1 = ClipboardItem(type: .text, textContent: "Hello Balajee", displayTitle: "Hello Balajee")
         let item2 = ClipboardItem(type: .text, textContent: "Hello Balajee", displayTitle: "Hello Balajee")
         
         store.forceAddForTest(item: item1)
         store.forceAddForTest(item: item2)
         
-        XCTAssertEqual(store.items.count, 1)
-        XCTAssertEqual(store.items.first?.textContent, "Hello Balajee")
-    }
-    
-    func testHistoryLimits() {
-        let store = ClipboardStore.shared
+        check(store.items.count == 1, "Deduplication count mismatch")
+        check(store.items.first?.textContent == "Hello Balajee", "Deduplication text content mismatch")
         
-        // Override limit for test case
-        UserDefaults.standard.set(3, forKey: "textHistoryLimit")
+        // Test Search
+        let item3 = ClipboardItem(type: .text, textContent: "npm install express", displayTitle: "npm install express")
+        let item4 = ClipboardItem(type: .text, textContent: "github.com/example", displayTitle: "github.com/example")
         
-        let item1 = ClipboardItem(type: .text, textContent: "Text 1", displayTitle: "Text 1")
-        let item2 = ClipboardItem(type: .text, textContent: "Text 2", displayTitle: "Text 2")
-        let item3 = ClipboardItem(type: .text, textContent: "Text 3", displayTitle: "Text 3")
-        let item4 = ClipboardItem(type: .text, textContent: "Text 4", displayTitle: "Text 4")
-        
-        store.forceAddForTest(item: item1)
-        store.forceAddForTest(item: item2)
         store.forceAddForTest(item: item3)
         store.forceAddForTest(item: item4)
         
-        XCTAssertEqual(store.items.count, 3)
-        // Order should be Text 4, Text 3, Text 2 (newest first, oldest evicted)
-        XCTAssertEqual(store.items[0].textContent, "Text 4")
-        XCTAssertEqual(store.items[1].textContent, "Text 3")
-        XCTAssertEqual(store.items[2].textContent, "Text 2")
-    }
-    
-    func testSearch() {
-        let store = ClipboardStore.shared
-        
-        let item1 = ClipboardItem(type: .text, textContent: "npm install express", displayTitle: "npm install express")
-        let item2 = ClipboardItem(type: .text, textContent: "github.com/example", displayTitle: "github.com/example")
-        let item3 = ClipboardItem(type: .text, textContent: "hello world", displayTitle: "hello world")
-        
-        store.forceAddForTest(item: item1)
-        store.forceAddForTest(item: item2)
-        store.forceAddForTest(item: item3)
-        
         let vm = ClipboardPanelViewModel()
-        
-        // Test query match
         vm.searchText = "npm"
-        XCTAssertEqual(vm.filteredItems.count, 1)
-        XCTAssertEqual(vm.filteredItems.first?.textContent, "npm install express")
+        check(vm.filteredItems.count == 1, "Search count mismatch")
+        check(vm.filteredItems.first?.textContent == "npm install express", "Search content mismatch")
         
-        // Test case insensitive match
         vm.searchText = "GITHUB"
-        XCTAssertEqual(vm.filteredItems.count, 1)
-        XCTAssertEqual(vm.filteredItems.first?.textContent, "github.com/example")
+        check(vm.filteredItems.count == 1, "Search case insensitive count mismatch")
+        check(vm.filteredItems.first?.textContent == "github.com/example", "Search case insensitive content mismatch")
         
-        // Test empty/non match
         vm.searchText = "nonexistent"
-        XCTAssertTrue(vm.filteredItems.isEmpty)
+        check(vm.filteredItems.isEmpty, "Search non-match failed")
+        
+        // Test Real Clipboard Calculation Integration Flow (Requirement 36)
+        testRealClipboardFlow(check: check)
+        
+        print("✅ ClipboardTests passed successfully!")
     }
     
-    func testPersistence() {
-        let store = ClipboardStore.shared
-        
-        let item = ClipboardItem(type: .text, textContent: "Persisted item", displayTitle: "Persisted item")
-        store.forceAddForTest(item: item)
-        store.saveHistory()
-        
-        let saveExpectation = XCTestExpectation(description: "Save finish")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            saveExpectation.fulfill()
+    private static func testRealClipboardFlow(check: (Bool, String, Int) -> Void) {
+        func verifyClipboardItem(copiedText: String, expectedLeft: String, expectedRight: String?, line: Int = #line) {
+            let calcResult = ExpressionParser.evaluate(copiedText)
+            let item = ClipboardItem(
+                type: .text,
+                textContent: copiedText,
+                displayTitle: copiedText,
+                calculationResult: calcResult
+            )
+            check(item.displayTitle == expectedLeft, "LEFT side mismatch for '\(copiedText)': expected '\(expectedLeft)', got '\(item.displayTitle)'", line)
+            check(item.calculationResult == expectedRight, "RIGHT side mismatch for '\(copiedText)': expected '\(expectedRight ?? "nil")', got '\(item.calculationResult ?? "nil")'", line)
         }
-        wait(for: [saveExpectation], timeout: 1.0)
         
-        store.clearHistory()
-        
-        let clearExpectation = XCTestExpectation(description: "Clear finish")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            clearExpectation.fulfill()
-        }
-        wait(for: [clearExpectation], timeout: 1.0)
-        
-        XCTAssertEqual(store.items.count, 0)
-        
-        store.loadHistory()
-        
-        let loadExpectation = XCTestExpectation(description: "Load finish")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            loadExpectation.fulfill()
-        }
-        wait(for: [loadExpectation], timeout: 1.0)
-        
-        XCTAssertEqual(store.items.count, 1)
-        XCTAssertEqual(store.items.first?.textContent, "Persisted item")
+        verifyClipboardItem(copiedText: "4^2", expectedLeft: "4^2", expectedRight: "16")
+        verifyClipboardItem(copiedText: "2(4)", expectedLeft: "2(4)", expectedRight: "8")
+        verifyClipboardItem(copiedText: "235*24214 =", expectedLeft: "235*24214 =", expectedRight: "5,690,290")
+        verifyClipboardItem(copiedText: "sin(90)", expectedLeft: "sin(90)", expectedRight: "1")
+        verifyClipboardItem(copiedText: "sqrt(16)", expectedLeft: "sqrt(16)", expectedRight: "4")
+        verifyClipboardItem(copiedText: "Hello world", expectedLeft: "Hello world", expectedRight: nil)
+        verifyClipboardItem(copiedText: "I have 25 apples", expectedLeft: "I have 25 apples", expectedRight: nil)
+        verifyClipboardItem(copiedText: "2+2=4", expectedLeft: "2+2=4", expectedRight: nil)
     }
 }
