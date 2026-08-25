@@ -35,6 +35,15 @@ public class SettingsManager: ObservableObject {
         }
     }
     
+    @Published public var isScreenshotTrackingPaused: Bool {
+        didSet {
+            defaults.set(isScreenshotTrackingPaused, forKey: "isScreenshotTrackingPaused")
+            if !isScreenshotTrackingPaused {
+                ScreenshotMonitor.shared.resumeTracking()
+            }
+        }
+    }
+    
     @Published public var clearHistoryOnQuit: Bool {
         didSet {
             defaults.set(clearHistoryOnQuit, forKey: "clearHistoryOnQuit")
@@ -70,6 +79,7 @@ public class SettingsManager: ObservableObject {
         self.imageHistoryLimit = defaults.integer(forKey: "imageHistoryLimit") == 0 ? 10 : defaults.integer(forKey: "imageHistoryLimit")
         self.otherHistoryLimit = defaults.integer(forKey: "otherHistoryLimit") == 0 ? 10 : defaults.integer(forKey: "otherHistoryLimit")
         self.isHistoryPaused = defaults.bool(forKey: "isHistoryPaused")
+        self.isScreenshotTrackingPaused = defaults.bool(forKey: "isScreenshotTrackingPaused")
         self.clearHistoryOnQuit = defaults.bool(forKey: "clearHistoryOnQuit")
         
         // Default hotkey: Command + Shift + V (Keycode 9, Modifiers 768)

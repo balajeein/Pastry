@@ -9,6 +9,7 @@ public class ScreenshotMonitor {
     private var dirFileDescriptor: Int32 = -1
     private var processedFileURLs: Set<URL> = []
     private var processedHashes: Set<String> = []
+    private var monitoringStartTime: Date = Date()
     private let queue = DispatchQueue(label: "com.balajee.Pastry.ScreenshotMonitor", qos: .utility)
     
     private init() {}
@@ -26,10 +27,17 @@ public class ScreenshotMonitor {
         }
     }
     
+    public func resumeTracking() {
+        queue.async {
+            self.updateBaselineToNowInternal()
+        }
+    }
+    
     public func resetTrackingForTest() {
         queue.sync {
             self.processedFileURLs.removeAll()
             self.processedHashes.removeAll()
+            self.monitoringStartTime = Date.distantPast
         }
     }
     
@@ -54,6 +62,8 @@ public class ScreenshotMonitor {
         guard fd != -1 else { return }
         self.dirFileDescriptor = fd
         
+        updateBaselineToNowInternal()
+        
         let source = DispatchSource.makeFileSystemObjectSource(
             fileDescriptor: fd,
             eventMask: [.write, .extend],
@@ -70,9 +80,23 @@ public class ScreenshotMonitor {
         
         self.source = source
         source.resume()
-        
-        // Initial scan of recent screenshots (within last 3 seconds)
-        handleDirectoryChange(directory: screenshotDir, timeWindow: 3.0)
+    }
+    
+    public func updateBaselineToNow() {
+        queue.async {
+            self.updateBaselineToNowInternal()
+        }
+    }
+    
+    private func updateBaselineToNowInternal() {
+        monitoringStartTime = Date()
+        let screenshotDir = ScreenshotMonitor.getScreenshotDirectory()
+        let fm = FileManager.default
+        if let existingFiles = try? fm.contentsOfDirectory(at: screenshotDir, includingPropertiesForKeys: nil, options: []) {
+            for file in existingFiles {
+                processedFileURLs.insert(file)
+            }
+        }
     }
     
     /// Resolves active macOS screenshot destination directory (respecting `defaults read com.apple.screencapture location`)
@@ -88,51 +112,69 @@ public class ScreenshotMonitor {
         return FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first!
     }
     
-    public func scanDirectoryNow(directory: URL? = nil, timeWindow: TimeInterval = 10.0) {
+    public func scanDirectoryNow(directory: URL? = nil) {
         let dir = directory ?? ScreenshotMonitor.getScreenshotDirectory()
         queue.async {
-            self.handleDirectoryChange(directory: dir, timeWindow: timeWindow)
+            self.handleDirectoryChange(directory: dir)
         }
     }
     
-    public func scanDirectorySync(directory: URL? = nil, timeWindow: TimeInterval = 10.0) {
+    public func scanDirectorySync(directory: URL? = nil) {
         let dir = directory ?? ScreenshotMonitor.getScreenshotDirectory()
         queue.sync {
-            self.handleDirectoryChange(directory: dir, timeWindow: timeWindow)
+            self.handleDirectoryChange(directory: dir)
         }
     }
     
-    private func handleDirectoryChange(directory: URL, timeWindow: TimeInterval = 120.0) {
+    private func handleDirectoryChange(directory: URL) {
+        let isPaused = UserDefaults.standard.bool(forKey: "isHistoryPaused") || UserDefaults.standard.bool(forKey: "isScreenshotTrackingPaused")
+        
         let fm = FileManager.default
+        // Do NOT use [.skipsHiddenFiles] so hidden screenshot temp files (.Screenshot...) are detected immediately while floating preview is visible!
         guard let files = try? fm.contentsOfDirectory(
             at: directory,
             includingPropertiesForKeys: [.creationDateKey, .contentModificationDateKey, .fileSizeKey],
-            options: [.skipsHiddenFiles]
+            options: []
         ) else { return }
         
-        let now = Date()
-        
         for fileURL in files {
-            let ext = fileURL.pathExtension.lowercased()
-            guard ext == "png" || ext == "jpg" || ext == "jpeg" else { continue }
+            let rawName = fileURL.lastPathComponent
+            var cleanName = rawName
+            while cleanName.hasPrefix(".") {
+                cleanName.removeFirst()
+            }
+            if let hyphenIdx = cleanName.firstIndex(of: "-") {
+                cleanName = String(cleanName[..<hyphenIdx])
+            }
             
-            let fileName = fileURL.lastPathComponent
-            let isScreenshotName = fileName.hasPrefix("Screenshot") ||
-                                   fileName.hasPrefix("Screen Shot") ||
-                                   fileName.hasPrefix("ScreenShot") ||
-                                   fileName.contains("Screenshot") ||
-                                   fileName.contains("Screen Shot")
+            let isScreenshotName = cleanName.hasPrefix("Screenshot") ||
+                                   cleanName.hasPrefix("Screen Shot") ||
+                                   cleanName.hasPrefix("ScreenShot") ||
+                                   cleanName.contains("Screenshot") ||
+                                   cleanName.contains("Screen Shot")
             
             guard isScreenshotName else { continue }
             
+            let ext = fileURL.pathExtension.lowercased()
+            let isImageExt = ext == "png" || ext == "jpg" || ext == "jpeg" || rawName.contains(".png") || rawName.contains(".jpg")
+            guard isImageExt else { continue }
+            
+            // If paused: mark all existing/incoming screenshot files as seen/processed so they are permanently ignored!
+            if isPaused {
+                processedFileURLs.insert(fileURL)
+                continue
+            }
+            
             let values = try? fileURL.resourceValues(forKeys: [.creationDateKey, .contentModificationDateKey, .fileSizeKey])
             let creationDate = values?.creationDate ?? values?.contentModificationDate ?? Date()
-            let fileSize = values?.fileSize ?? (try? Data(contentsOf: fileURL).count) ?? 0
-            guard fileSize > 0 else { continue }
             
-            if abs(now.timeIntervalSince(creationDate)) <= timeWindow {
-                processScreenshotFile(at: fileURL)
+            // Strictly enforce creationDate >= monitoringStartTime (minus 0.5s clock tolerance)
+            guard creationDate >= monitoringStartTime.addingTimeInterval(-0.5) else {
+                processedFileURLs.insert(fileURL)
+                continue
             }
+            
+            processScreenshotFile(at: fileURL)
         }
     }
     
@@ -141,11 +183,13 @@ public class ScreenshotMonitor {
         
         var data: Data? = nil
         for _ in 0..<5 {
-            if let d = try? Data(contentsOf: fileURL), d.count > 0 {
-                data = d
-                break
+            if let d = try? Data(contentsOf: fileURL), d.count > 100 {
+                if let source = CGImageSourceCreateWithData(d as CFData, nil), CGImageSourceGetCount(source) > 0 {
+                    data = d
+                    break
+                }
             }
-            Thread.sleep(forTimeInterval: 0.1)
+            Thread.sleep(forTimeInterval: 0.02)
         }
         
         guard let imageData = data else { return }
@@ -153,7 +197,10 @@ public class ScreenshotMonitor {
         let digest = SHA256.hash(data: imageData)
         let hashString = digest.map { String(format: "%02x", $0) }.joined()
         
-        guard !processedHashes.contains(hashString) else { return }
+        guard !processedHashes.contains(hashString) else {
+            processedFileURLs.insert(fileURL)
+            return
+        }
         
         processedFileURLs.insert(fileURL)
         processedHashes.insert(hashString)

@@ -298,6 +298,10 @@ struct PrivacySettingsTab: View {
                     .toggleStyle(.checkbox)
                     .font(.system(size: 13))
                 
+                Toggle("Pause auto screenshot tracking", isOn: $settings.isScreenshotTrackingPaused)
+                    .toggleStyle(.checkbox)
+                    .font(.system(size: 13))
+                
                 Toggle("Clear history on quit", isOn: $settings.clearHistoryOnQuit)
                     .toggleStyle(.checkbox)
                     .font(.system(size: 13))
