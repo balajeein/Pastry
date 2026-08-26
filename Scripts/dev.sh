@@ -23,12 +23,12 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-# Read version from VERSION file if present
 VERSION_FILE="$PROJECT_DIR/VERSION"
-MARKETING_VERSION="1.0.0"
-BUILD_NUMBER="1"
 if [ -f "$VERSION_FILE" ]; then
-    source "$VERSION_FILE" 2>/dev/null || true
+    source "$VERSION_FILE"
+else
+    echo -e "${RED}✘  VERSION file missing at $VERSION_FILE${NC}"
+    exit 1
 fi
 
 kill_pastry() {
@@ -45,30 +45,18 @@ build_debug() {
 
     mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 
-    # Compile Universal 2 (arm64 + x86_64) targeting macOS 11.0
-    xcrun swiftc \
-        -swift-version 5 \
-        -target arm64-apple-macos11.0 \
-        -g \
-        -Onone \
-        -o "$BINARY-arm64" \
-        $(find "$PROJECT_DIR/Pastry" "$PROJECT_DIR/PastryApp" -name "*.swift")
-
-    xcrun swiftc \
-        -swift-version 5 \
-        -target x86_64-apple-macos11.0 \
-        -g \
-        -Onone \
-        -o "$BINARY-x86_64" \
-        $(find "$PROJECT_DIR/Pastry" "$PROJECT_DIR/PastryApp" -name "*.swift")
-
-    lipo -create -output "$BINARY" "$BINARY-arm64" "$BINARY-x86_64"
-    rm -f "$BINARY-arm64" "$BINARY-x86_64"
-
     # Copy Info.plist and inject current version numbers
     cp "$PROJECT_DIR/Pastry/Resources/Info.plist" "$APP_BUNDLE/Contents/Info.plist"
     plutil -replace CFBundleShortVersionString -string "$MARKETING_VERSION" "$APP_BUNDLE/Contents/Info.plist" 2>/dev/null || true
     plutil -replace CFBundleVersion -string "$BUILD_NUMBER" "$APP_BUNDLE/Contents/Info.plist" 2>/dev/null || true
+
+    # Compile Universal 2 (arm64 + x86_64) targeting macOS 11.0
+    xcrun swiftc -swift-version 5 -target arm64-apple-macos11.0 -g -Onone -o "$BINARY-arm64" $(find "$PROJECT_DIR/Pastry" "$PROJECT_DIR/PastryApp" -name "*.swift")
+
+    xcrun swiftc -swift-version 5 -target x86_64-apple-macos11.0 -g -Onone -o "$BINARY-x86_64" $(find "$PROJECT_DIR/Pastry" "$PROJECT_DIR/PastryApp" -name "*.swift")
+
+    lipo -create -output "$BINARY" "$BINARY-arm64" "$BINARY-x86_64"
+    rm -f "$BINARY-arm64" "$BINARY-x86_64"
 
     if [ -f "$PROJECT_DIR/Pastry/Resources/AppIcon.icns" ]; then
         cp -u "$PROJECT_DIR/Pastry/Resources/AppIcon.icns" "$RESOURCES_DIR/AppIcon.icns" 2>/dev/null \

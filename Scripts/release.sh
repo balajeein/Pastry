@@ -54,9 +54,7 @@ if [ ! -f "$VERSION_FILE" ]; then
     exit 1
 fi
 
-MARKETING_VERSION="1.0.0"
-BUILD_NUMBER="1"
-source "$VERSION_FILE" 2>/dev/null || true
+source "$VERSION_FILE"
 
 echo -e "${CYAN}📌 Target Release: Pastry v${MARKETING_VERSION} (Build ${BUILD_NUMBER})${NC}"
 
