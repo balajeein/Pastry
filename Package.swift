@@ -3,6 +3,9 @@ import PackageDescription
 
 let package = Package(
     name: "Pastry",
+    platforms: [
+        .macOS(.v11)
+    ],
     targets: [
         .target(
             name: "PastryCore",

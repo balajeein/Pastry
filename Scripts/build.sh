@@ -34,12 +34,23 @@ start_time=$(date +%s)
 rm -rf "$APP_BUNDLE"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 
-# Compile — release mode (-O)
+# Compile Universal 2 (arm64 + x86_64) targeting macOS 11.0
 xcrun swiftc \
     -swift-version 5 \
+    -target arm64-apple-macos11.0 \
     -O \
-    -o "$MACOS_DIR/Pastry" \
+    -o "$MACOS_DIR/Pastry-arm64" \
     $(find "$PROJECT_DIR/Pastry" "$PROJECT_DIR/PastryApp" -name "*.swift")
+
+xcrun swiftc \
+    -swift-version 5 \
+    -target x86_64-apple-macos11.0 \
+    -O \
+    -o "$MACOS_DIR/Pastry-x86_64" \
+    $(find "$PROJECT_DIR/Pastry" "$PROJECT_DIR/PastryApp" -name "*.swift")
+
+lipo -create -output "$MACOS_DIR/Pastry" "$MACOS_DIR/Pastry-arm64" "$MACOS_DIR/Pastry-x86_64"
+rm -f "$MACOS_DIR/Pastry-arm64" "$MACOS_DIR/Pastry-x86_64"
 
 # Copy Info.plist and inject current version numbers
 cp "$PROJECT_DIR/Pastry/Resources/Info.plist" "$APP_BUNDLE/Contents/Info.plist"

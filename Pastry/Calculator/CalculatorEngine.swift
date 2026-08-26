@@ -16,20 +16,22 @@ public class CalculatorEngine {
         
         guard trimmed.count <= 2000 else { return nil }
         
-        if isNonMathPattern(trimmed) {
+        let normalized = CalculatorTokenizer.normalizeUnicodeOperators(trimmed)
+        
+        if isNonMathPattern(normalized) {
             return nil
         }
         
         // Check for equation solving (e.g. x + 5 = 10)
-        if trimmed.contains("=") && !trimmed.hasSuffix("=") {
-            if let eqResult = EquationSolver.solve(trimmed, angleMode: angleMode) {
+        if normalized.contains("=") && !normalized.hasSuffix("=") {
+            if let eqResult = EquationSolver.solve(normalized, angleMode: angleMode) {
                 return eqResult
             }
             return nil
         }
         
         // Normalize trailing '=' (e.g., "2 + 2 =" -> "2 + 2")
-        var normInput = trimmed
+        var normInput = normalized
         let trailingEqualsWasPresent = normInput.hasSuffix("=")
         if trailingEqualsWasPresent {
             normInput = String(normInput.dropLast()).trimmingCharacters(in: .whitespaces)

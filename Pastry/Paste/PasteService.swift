@@ -29,7 +29,11 @@ public class PasteService {
         }
         
         // Activate target application ignoring other apps
-        app.activate()
+        if #available(macOS 14.0, *) {
+            app.activate()
+        } else {
+            app.activate(options: .activateIgnoringOtherApps)
+        }
         
         // 3. Wait for focus transfer, then simulate Command+V
         // 75ms is the optimal delay (minimizes visible lag while ensuring focus has shifted)

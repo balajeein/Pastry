@@ -78,13 +78,20 @@ public struct ClipboardPanelView: View {
                     .foregroundColor(.secondary)
                     .font(.system(size: 13, weight: .semibold))
                 
-                TextField("Search clipboard...", text: $viewModel.searchText)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 13))
-                    .foregroundColor(.primary)
-                    .onSubmit {
-                        viewModel.selectAndPaste(onClose: onClose)
-                    }
+                if #available(macOS 12.0, *) {
+                    TextField("Search clipboard...", text: $viewModel.searchText)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 13))
+                        .foregroundColor(.primary)
+                        .onSubmit {
+                            viewModel.selectAndPaste(onClose: onClose)
+                        }
+                } else {
+                    TextField("Search clipboard...", text: $viewModel.searchText)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 13))
+                        .foregroundColor(.primary)
+                }
                 
                 if !viewModel.searchText.isEmpty {
                     Button(action: { viewModel.searchText = "" }) {
@@ -144,7 +151,7 @@ public struct ClipboardPanelView: View {
                         }
                         .padding(6)
                     }
-                    .onChange(of: viewModel.selectedIndex) { _, newIndex in
+                    .onChange(of: viewModel.selectedIndex) { newIndex in
                         proxy.scrollTo(newIndex, anchor: .center)
                     }
                 }

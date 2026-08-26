@@ -67,15 +67,26 @@ struct ShortcutRecorderView: View {
                 Spacer()
 
                 // Reset to ⌘⇧V
-                Button("Reset to Default") {
-                    stopRecording()
-                    settings.resetToDefault()
+                if #available(macOS 12.0, *) {
+                    Button("Reset to Default") {
+                        stopRecording()
+                        settings.resetToDefault()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .disabled(!isRecording &&
+                              settings.hotKeyCode == 9 &&
+                              settings.hotKeyModifiers == 768)
+                } else {
+                    Button("Reset to Default") {
+                        stopRecording()
+                        settings.resetToDefault()
+                    }
+                    .controlSize(.small)
+                    .disabled(!isRecording &&
+                              settings.hotKeyCode == 9 &&
+                              settings.hotKeyModifiers == 768)
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .disabled(!isRecording &&
-                          settings.hotKeyCode == 9 &&
-                          settings.hotKeyModifiers == 768)
             }
 
             // Conflict warning
@@ -209,14 +220,24 @@ struct GeneralSettingsTab: View {
                     
                     Spacer()
                     
-                    Button(hasAccessibility ? "Open Settings" : "Grant Access...") {
-                        if !hasAccessibility {
-                            PasteService.shared.requestAccessibilityPermission()
-                        } else {
-                            PasteService.shared.openAccessibilitySettings()
+                    if #available(macOS 12.0, *) {
+                        Button(hasAccessibility ? "Open Settings" : "Grant Access...") {
+                            if !hasAccessibility {
+                                PasteService.shared.requestAccessibilityPermission()
+                            } else {
+                                PasteService.shared.openAccessibilitySettings()
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                    } else {
+                        Button(hasAccessibility ? "Open Settings" : "Grant Access...") {
+                            if !hasAccessibility {
+                                PasteService.shared.requestAccessibilityPermission()
+                            } else {
+                                PasteService.shared.openAccessibilitySettings()
+                            }
                         }
                     }
-                    .buttonStyle(.bordered)
                 }
                 
                 Text("Pastry needs Accessibility permission to paste clipboard items into the application you're currently using.")
@@ -310,16 +331,33 @@ struct PrivacySettingsTab: View {
                     .padding(.vertical, 4)
                 
                 HStack {
-                    Button(role: .destructive, action: { showingClearConfirmation = true }) {
-                        Text("Clear All Clipboard History")
-                            .foregroundColor(.red)
-                    }
-                    .buttonStyle(.bordered)
-                    .confirmationDialog("Are you sure you want to clear all clipboard history? This will delete all cached text, files, and image thumbnails from your local disk.", isPresented: $showingClearConfirmation) {
-                        Button("Clear", role: .destructive) {
-                            ClipboardStore.shared.clearHistory()
+                    if #available(macOS 12.0, *) {
+                        Button(role: .destructive, action: { showingClearConfirmation = true }) {
+                            Text("Clear All Clipboard History")
+                                .foregroundColor(.red)
                         }
-                        Button("Cancel", role: .cancel) {}
+                        .buttonStyle(.bordered)
+                        .confirmationDialog("Are you sure you want to clear all clipboard history? This will delete all cached text, files, and image thumbnails from your local disk.", isPresented: $showingClearConfirmation) {
+                            Button("Clear", role: .destructive) {
+                                ClipboardStore.shared.clearHistory()
+                            }
+                            Button("Cancel", role: .cancel) {}
+                        }
+                    } else {
+                        Button(action: { showingClearConfirmation = true }) {
+                            Text("Clear All Clipboard History")
+                                .foregroundColor(.red)
+                        }
+                        .alert(isPresented: $showingClearConfirmation) {
+                            Alert(
+                                title: Text("Clear All Clipboard History"),
+                                message: Text("Are you sure you want to clear all clipboard history? This will delete all cached text, files, and image thumbnails from your local disk."),
+                                primaryButton: .destructive(Text("Clear")) {
+                                    ClipboardStore.shared.clearHistory()
+                                },
+                                secondaryButton: .cancel()
+                            )
+                        }
                     }
                     Spacer()
                 }

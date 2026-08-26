@@ -133,7 +133,25 @@ public struct CalculatorTests {
         // 19. Large Calculations
         check("99999*99999", expected: "9,999,800,001")
         
-        // 20. Equation Solving
+        // 20. Unicode Minus & Negative Decimals Regression Tests
+        check("(−0.4)(1) + (−0.6)(2) + 0.1", expected: "-1.5")
+        check("0.3113 − 0.2193 + 0.1459 + 0.2", expected: "0.4379")
+        check("23 + 2345", expected: "2,368")
+        check("0.5 + 0.5", expected: "1")
+        check("32.232 + 234", expected: "266.232")
+        check("-5 + 3", expected: "-2")
+        check("-5 - 3", expected: "-8")
+        check("(-5) + 3", expected: "-2")
+        check("(-5)(2)", expected: "-10")
+        check("−5 + 3", expected: "-2")
+        check("5 − 3", expected: "2")
+        check("−5 − 3", expected: "-8")
+        check("(2)(3)", expected: "6")
+        check("(2 + 3)(4)", expected: "20")
+        check("(-2)(3)", expected: "-6")
+        check("(−0.4)(1)", expected: "-0.4")
+        
+        // 21. Equation Solving
         check("x + 5 = 10", expected: "x = 5")
         check("2x = 10", expected: "x = 5")
         check("x^2 = 25", expected: "x = ±5")

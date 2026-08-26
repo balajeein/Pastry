@@ -45,13 +45,25 @@ build_debug() {
 
     mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 
-    # Compile — debug mode (-Onone, -g), fast builds
+    # Compile Universal 2 (arm64 + x86_64) targeting macOS 11.0
     xcrun swiftc \
         -swift-version 5 \
+        -target arm64-apple-macos11.0 \
         -g \
         -Onone \
-        -o "$BINARY" \
+        -o "$BINARY-arm64" \
         $(find "$PROJECT_DIR/Pastry" "$PROJECT_DIR/PastryApp" -name "*.swift")
+
+    xcrun swiftc \
+        -swift-version 5 \
+        -target x86_64-apple-macos11.0 \
+        -g \
+        -Onone \
+        -o "$BINARY-x86_64" \
+        $(find "$PROJECT_DIR/Pastry" "$PROJECT_DIR/PastryApp" -name "*.swift")
+
+    lipo -create -output "$BINARY" "$BINARY-arm64" "$BINARY-x86_64"
+    rm -f "$BINARY-arm64" "$BINARY-x86_64"
 
     # Copy Info.plist and inject current version numbers
     cp "$PROJECT_DIR/Pastry/Resources/Info.plist" "$APP_BUNDLE/Contents/Info.plist"

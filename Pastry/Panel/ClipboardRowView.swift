@@ -31,7 +31,7 @@ struct ImageThumbnailView: View {
         .onAppear {
             loadThumbnail(path: storagePath)
         }
-        .onChange(of: storagePath) { _, newPath in
+        .onChange(of: storagePath) { newPath in
             loadThumbnail(path: newPath)
         }
     }

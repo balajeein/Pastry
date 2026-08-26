@@ -18,11 +18,36 @@ public enum CalculatorTokenizer {
         "x", "X"
     ]
     
+    /// Centralized mathematical Unicode character normalization.
+    public static func normalizeUnicodeOperators(_ input: String) -> String {
+        var result = input
+        // U+2212 MINUS SIGN "−" -> "-"
+        result = result.replacingOccurrences(of: "\u{2212}", with: "-")
+        // U+2013 EN DASH "–" -> "-"
+        result = result.replacingOccurrences(of: "\u{2013}", with: "-")
+        // U+2014 EM DASH "—" -> "-"
+        result = result.replacingOccurrences(of: "\u{2014}", with: "-")
+        // U+00D7 MULTIPLICATION SIGN "×" -> "*"
+        result = result.replacingOccurrences(of: "\u{00D7}", with: "*")
+        // U+00F7 DIVISION SIGN "÷" -> "/"
+        result = result.replacingOccurrences(of: "\u{00F7}", with: "/")
+        // U+22C5 DOT OPERATOR "⋅" -> "*"
+        result = result.replacingOccurrences(of: "\u{22C5}", with: "*")
+        // U+00B7 MIDDLE DOT "·" -> "*"
+        result = result.replacingOccurrences(of: "\u{00B7}", with: "*")
+        // U+2217 ASTERISK OPERATOR "∗" -> "*"
+        result = result.replacingOccurrences(of: "\u{2217}", with: "*")
+        // U+2044 FRACTION SLASH "⁄" -> "/"
+        result = result.replacingOccurrences(of: "\u{2044}", with: "/")
+        return result
+    }
+    
     /// Tokenizes input string into a tuple of tokens and boolean indicating if any operator/function/constant was found.
     public static func tokenize(_ input: String) -> (tokens: [CalculatorToken], hasOpOrFunc: Bool)? {
+        let normalizedInput = normalizeUnicodeOperators(input)
         var rawTokens: [CalculatorToken] = []
         var hasScientificNotation = false
-        let chars = Array(input)
+        let chars = Array(normalizedInput)
         var i = 0
         
         while i < chars.count {

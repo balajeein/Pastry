@@ -2,6 +2,26 @@ import Foundation
 import ServiceManagement
 import Combine
 
+@available(macOS 13.0, *)
+private enum LaunchAtLoginService {
+    static var isEnabled: Bool {
+        return SMAppService.mainApp.status == .enabled
+    }
+    
+    static func setEnabled(_ enabled: Bool) throws {
+        let service = SMAppService.mainApp
+        if enabled {
+            if service.status != .enabled {
+                try service.register()
+            }
+        } else {
+            if service.status == .enabled {
+                try service.unregister()
+            }
+        }
+    }
+}
+
 public class SettingsManager: ObservableObject {
     public static let shared = SettingsManager()
     
@@ -89,7 +109,11 @@ public class SettingsManager: ObservableObject {
         self.hotKeyCode = savedKeyCode ?? 9
         self.hotKeyModifiers = savedModifiers ?? 768
         
-        self.isLaunchAtLogin = SMAppService.mainApp.status == .enabled
+        if #available(macOS 13.0, *) {
+            self.isLaunchAtLogin = LaunchAtLoginService.isEnabled
+        } else {
+            self.isLaunchAtLogin = defaults.bool(forKey: "isLaunchAtLogin")
+        }
     }
     
     public func registerCurrentHotkey() {
@@ -107,22 +131,18 @@ public class SettingsManager: ObservableObject {
     }
     
     private func setLaunchAtLogin(enabled: Bool) {
-        let service = SMAppService.mainApp
-        do {
-            if enabled {
-                if service.status != .enabled {
-                    try service.register()
-                }
-            } else {
-                if service.status == .enabled {
-                    try service.unregister()
+        defaults.set(enabled, forKey: "isLaunchAtLogin")
+        if #available(macOS 13.0, *) {
+            do {
+                try LaunchAtLoginService.setEnabled(enabled)
+            } catch {
+                DispatchQueue.main.async {
+                    self.isLaunchAtLogin = LaunchAtLoginService.isEnabled
                 }
             }
-        } catch {
-            // Silently handle error, fallback status update
-            DispatchQueue.main.async {
-                self.isLaunchAtLogin = service.status == .enabled
-            }
+        } else {
+            let helperBundleIdentifier = "com.balajee.Pastry" as CFString
+            SMLoginItemSetEnabled(helperBundleIdentifier, enabled)
         }
     }
 }
