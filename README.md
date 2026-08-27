@@ -1,40 +1,40 @@
-# 🥐 Pastry — Native macOS Clipboard Manager & Math Engine
+# Pastry — Native macOS Clipboard Manager & Math Engine
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![macOS 11.0+](https://img.shields.io/badge/macOS-11.0%2B-apple.svg)](https://www.apple.com/macos/)
 [![Swift 5.0](https://img.shields.io/badge/Swift-5.0-orange.svg)](https://swift.org)
-[![Privacy: 100% Offline](https://img.shields.io/badge/Privacy-100%25%20Offline-success.svg)](#-privacy--security-model)
+[![Privacy: 100% Offline](https://img.shields.io/badge/Privacy-100%25%20Offline-success.svg)](#privacy--security-model)
 
 **Pastry** is a lightweight, ultra-fast, open-source macOS clipboard manager and inline mathematical evaluation tool. Designed to feel like a native macOS system utility, Pastry runs silently in your menu bar and gives you instant access to your clipboard history and real-time calculation engine via a global keyboard shortcut (`⌘⇧V`).
 
 ---
 
-## ✨ Features
+## Features
 
-- 🚀 **Native & Lightweight:** Built purely with Swift, SwiftUI, AppKit, and Carbon. Zero third-party dependencies.
-- 📌 **Menu Bar Resident:** Runs cleanly as a status bar application (`LSUIElement`) without clogging your Dock or `Cmd+Tab` switcher.
-- ⌨️ **Global Shortcut (`⌘⇧V`):** Summon the floating clipboard panel instantly from any application. Custom shortcuts supported.
-- ⚡ **Auto-Paste Integration:** Automatically restores focus to your target application and simulates `⌘V` to paste selected history items.
-- 🧮 **Built-in Hand-written Math Engine:** Instantly detects, parses, and evaluates math expressions copied to your clipboard (arithmetic, trigonometry, logarithms, equation solving, and unit conversions).
-- 📸 **Automatic Screenshot Tracking:** Detects new Desktop screenshots in real-time, displays local disk thumbnails, and indexes them into your history.
-- 🔍 **Real-Time Fuzzy Search:** Search through copied text, URLs, image dimensions, and file paths with instantaneous filtering.
-- 🛡️ **Privacy First & Password Manager Aware:** 100% offline local processing. Automatically ignores transient/concealed pasteboard data from password managers (1Password, Bitwarden, Keychain).
-- 🌗 **Adaptive Dark & Light Modes:** Dynamically matches your macOS system appearance with a glassmorphic design.
+- **Native & Lightweight:** Built purely with Swift, SwiftUI, AppKit, and Carbon. Zero third-party dependencies.
+- **Menu Bar Resident:** Runs cleanly as a status bar application (`LSUIElement`) without clogging your Dock or `Cmd+Tab` switcher.
+- **Global Shortcut (`⌘⇧V`):** Summon the floating clipboard panel instantly from any application. Custom shortcuts supported.
+- **Auto-Paste Integration:** Automatically restores focus to your target application and simulates `⌘V` to paste selected history items.
+- **Built-in Hand-written Math Engine:** Instantly detects, parses, and evaluates math expressions copied to your clipboard (arithmetic, trigonometry, logarithms, equation solving, and unit conversions).
+- **Automatic Screenshot Tracking:** Detects new Desktop screenshots in real-time, displays local disk thumbnails, and indexes them into your history.
+- **Real-Time Fuzzy Search:** Search through copied text, URLs, image dimensions, and file paths with instantaneous filtering.
+- **Privacy First & Password Manager Aware:** 100% offline local processing. Automatically ignores transient/concealed pasteboard data from password managers (1Password, Bitwarden, Keychain).
+- **Adaptive Dark & Light Modes:** Dynamically matches your macOS system appearance with a glassmorphic design.
 
 ---
 
-## 🔒 Privacy & Security Model
+## Privacy & Security Model
 
 Pastry is engineered from the ground up to respect your privacy:
 
-* 🌐 **100% Offline Execution:** Zero network connections. No telemetry, no analytics, no crash reporters, no tracking SDKs.
-* 💾 **Local Storage Only:** History data is stored strictly on your local disk inside `~/Library/Application Support/Pastry/`.
-* 🔑 **Sensitive Data Exclusion:** Ignores pasteboard types marked as transient or concealed (`org.nspasteboard.TransientType`, `org.nspasteboard.ConcealedType`, `com.agilebits.onepassword`).
-* 🧹 **Flexible Cleanup:** Offers an optional *"Clear history on quit"* setting and instant history deletion controls.
+* **100% Offline Execution:** Zero network connections. No telemetry, no analytics, no crash reporters, no tracking SDKs.
+* **Local Storage Only:** History data is stored strictly on your local disk inside `~/Library/Application Support/Pastry/`.
+* **Sensitive Data Exclusion:** Ignores pasteboard types marked as transient or concealed (`org.nspasteboard.TransientType`, `org.nspasteboard.ConcealedType`, `com.agilebits.onepassword`).
+* **Flexible Cleanup:** Offers an optional *"Clear history on quit"* setting and instant history deletion controls.
 
 ---
 
-## 🧮 Built-in Calculator Engine
+## Built-in Calculator Engine
 
 Pastry includes a custom, zero-dependency recursive descent mathematical parser and evaluator. When text containing a mathematical expression is copied or typed into Pastry, the engine automatically calculates the result.
 
@@ -52,7 +52,7 @@ Pastry includes a custom, zero-dependency recursive descent mathematical parser 
 
 ---
 
-## 🖥️ User Interface & Controls
+## User Interface & Controls
 
 | Shortcut / Action | Action Description |
 | :--- | :--- |
@@ -65,7 +65,7 @@ Pastry includes a custom, zero-dependency recursive descent mathematical parser 
 
 ---
 
-## 📋 Requirements
+## Requirements
 
 * **Operating System:** macOS 11.0 (Big Sur) or later.
 * **Architectures:** Apple Silicon (`arm64`) and Intel (`x86_64`) Universal 2.
@@ -75,7 +75,7 @@ Pastry includes a custom, zero-dependency recursive descent mathematical parser 
 
 ---
 
-## 📥 Installation
+## Installation
 
 ### Pre-built Binary
 Download the latest `.dmg` release from the **[GitHub Releases](../../releases)** page:
@@ -101,7 +101,7 @@ cd Pastry
 
 ---
 
-## 🛠️ Developer & Build Reference
+## Developer & Build Reference
 
 Pastry includes Makefile targets and modular shell scripts for rapid development and production builds:
 
@@ -121,7 +121,7 @@ make test           # Execute entire SwiftPM unit test suite
 
 ---
 
-## 🧪 Testing
+## Testing
 
 Pastry includes automated unit tests covering the math engine, clipboard store, deduplication, and screenshot monitoring logic.
 
@@ -139,7 +139,7 @@ make test
 
 ---
 
-## 📂 Project Architecture
+## Project Architecture
 
 ```
 Pastry/
@@ -167,7 +167,7 @@ Pastry/
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! If you find a bug or have a feature request:
 
@@ -180,7 +180,7 @@ Contributions are welcome! If you find a bug or have a feature request:
 
 ---
 
-## 📄 License
+## License
 
 Pastry is open-source software licensed under the **[GNU General Public License v3.0 (GPLv3)](https://www.gnu.org/licenses/gpl-3.0.html)**.
 
