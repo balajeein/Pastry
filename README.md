@@ -182,14 +182,12 @@ Contributions are welcome! If you find a bug or have a feature request:
 
 ## License
 
-Pastry is open-source software licensed under the **[GNU General Public License v3.0 (GPLv3)](https://www.gnu.org/licenses/gpl-3.0.html)**.
+Pastry is free and open-source software licensed under the
+GNU General Public License v3.0 or later.
 
-```
-Pastry — Native macOS Clipboard Manager & Math Engine
-Copyright (C) 2026 Balajee
+See the [LICENSE](LICENSE) file for the full license.
 
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-```
+## Branding
+
+The Pastry name, logo, icons, and other branding are not licensed
+under the GPL unless explicitly stated otherwise.
