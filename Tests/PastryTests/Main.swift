@@ -7,5 +7,6 @@ struct TestRunner {
         ClipboardTests.runAll()
         ScreenshotTests.runAll()
         ScrollScreenshotTests.runAll()
+        TextShortcutTests.runAll()
     }
 }

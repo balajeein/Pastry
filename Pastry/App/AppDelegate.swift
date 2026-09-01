@@ -21,13 +21,18 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         // 3. Begin tracking Clipboard alterations
         ClipboardManager.shared.startMonitoring()
         
-        // 4. Handle first launch behavior
+        // 4. Begin monitoring Text Shortcuts (⌥ + Space)
+        TextShortcutStore.shared.load()
+        TextShortcutMonitor.shared.startMonitoring()
+        
+        // 5. Handle first launch behavior
         checkFirstLaunch()
     }
     
     public func applicationWillTerminate(_ notification: Notification) {
         // Stop tracking
         ClipboardManager.shared.stopMonitoring()
+        TextShortcutMonitor.shared.stopMonitoring()
         
         // Cleanup clipboard if configured
         if SettingsManager.shared.clearHistoryOnQuit {

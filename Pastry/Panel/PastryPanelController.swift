@@ -90,6 +90,9 @@ public class PastryPanelController: NSObject, NSWindowDelegate {
             },
             onScreenshot: { [weak self] in
                 self?.startScrollScreenshot()
+            },
+            onTextShortcuts: {
+                TextShortcutsWindowController.shared.toggleWindow()
             }
         )
         

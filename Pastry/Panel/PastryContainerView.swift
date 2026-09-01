@@ -5,31 +5,33 @@ public enum ScreenshotButtonSide {
     case right
 }
 
-/// Unified container view hosting the Clipboard Card and the adjacent Floating Screenshot Button.
-/// Rendering both within one transparent window eliminates all child-window artifacts and white corners.
+/// Unified container view hosting the Clipboard Card and adjacent Floating Action Buttons.
+/// (Screenshot button on top, Text Shortcuts button directly below).
 public struct PastryContainerView: View {
     @ObservedObject var viewModel: ClipboardPanelViewModel
     let buttonSide: ScreenshotButtonSide
     let onClose: () -> Void
     let onScreenshot: () -> Void
+    let onTextShortcuts: () -> Void
     
     public init(
         viewModel: ClipboardPanelViewModel,
         buttonSide: ScreenshotButtonSide = .right,
         onClose: @escaping () -> Void,
-        onScreenshot: @escaping () -> Void
+        onScreenshot: @escaping () -> Void,
+        onTextShortcuts: @escaping () -> Void
     ) {
         self.viewModel = viewModel
         self.buttonSide = buttonSide
         self.onClose = onClose
         self.onScreenshot = onScreenshot
+        self.onTextShortcuts = onTextShortcuts
     }
     
     public var body: some View {
         HStack(alignment: .top, spacing: 12) {
             if buttonSide == .left {
-                FloatingScreenshotButtonView(action: onScreenshot)
-                    .padding(.top, 6)
+                floatingButtons
             }
             
             // Main Clipboard Card
@@ -45,12 +47,19 @@ public struct PastryContainerView: View {
                 )
             
             if buttonSide == .right {
-                FloatingScreenshotButtonView(action: onScreenshot)
-                    .padding(.top, 6)
+                floatingButtons
             }
         }
         .padding(18) // Ambient padding for soft drop shadows and hover scaling
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.clear)
+    }
+    
+    private var floatingButtons: some View {
+        VStack(spacing: 10) {
+            FloatingScreenshotButtonView(action: onScreenshot)
+            FloatingTextShortcutsButtonView(action: onTextShortcuts)
+        }
+        .padding(.top, 6)
     }
 }
