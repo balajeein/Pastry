@@ -1,32 +1,35 @@
-import Cocoa
+import Foundation
+import AppKit
 import CoreGraphics
 
-// MARK: - Camera Cursor Extension
+// MARK: - Custom Camera Cursor
 
-public extension NSCursor {
-    /// Custom high-visibility camera cursor used during scroll screenshot capture.
+extension NSCursor {
+    /// Custom crosshair cursor with a camera icon badge for the scroll screenshot tool.
     static let cameraCursor: NSCursor = {
         let size = NSSize(width: 32, height: 32)
         let image = NSImage(size: size)
+        
         image.lockFocus()
         
-        let circleRect = NSRect(x: 3, y: 3, width: 26, height: 26)
-        let circlePath = NSBezierPath(ovalIn: circleRect)
+        // Draw crisp dark crosshair
+        NSColor.white.setStroke()
+        let path = NSBezierPath()
+        path.lineWidth = 2.5
+        path.move(to: NSPoint(x: 16, y: 4))
+        path.line(to: NSPoint(x: 16, y: 28))
+        path.move(to: NSPoint(x: 4, y: 16))
+        path.line(to: NSPoint(x: 28, y: 16))
+        path.stroke()
         
-        NSGraphicsContext.saveGraphicsState()
-        let shadow = NSShadow()
-        shadow.shadowColor = NSColor.black.withAlphaComponent(0.4)
-        shadow.shadowBlurRadius = 3
-        shadow.shadowOffset = NSSize(width: 0, height: -1)
-        shadow.set()
-        
-        NSColor(calibratedWhite: 0.15, alpha: 0.9).setFill()
-        circlePath.fill()
-        NSGraphicsContext.restoreGraphicsState()
-        
-        NSColor.white.withAlphaComponent(0.35).setStroke()
-        circlePath.lineWidth = 1.0
-        circlePath.stroke()
+        NSColor.black.setStroke()
+        let innerPath = NSBezierPath()
+        innerPath.lineWidth = 1.0
+        innerPath.move(to: NSPoint(x: 16, y: 5))
+        innerPath.line(to: NSPoint(x: 16, y: 27))
+        innerPath.move(to: NSPoint(x: 5, y: 16))
+        innerPath.line(to: NSPoint(x: 27, y: 16))
+        innerPath.stroke()
         
         if #available(macOS 11.0, *),
            let sfImage = NSImage(systemSymbolName: "camera.fill", accessibilityDescription: nil) {
@@ -70,11 +73,6 @@ class ScrollScreenshotOverlayView: NSView {
         didSet { needsDisplay = true }
     }
     
-    /// Selected scroll direction (default: vertical)
-    var scrollDirection: ImageStitcher.StitchDirection = .vertical {
-        didSet { needsDisplay = true }
-    }
-    
     /// Callbacks
     var onCapture: (() -> Void)?
     var onCancel: (() -> Void)?
@@ -98,7 +96,6 @@ class ScrollScreenshotOverlayView: NSView {
     // HUD Control Bar Layout Rects
     private var hudBarRect: NSRect = .zero
     private var closeButtonRect: NSRect = .zero
-    private var optionsButtonRect: NSRect = .zero
     private var captureButtonRect: NSRect = .zero
     
     override var acceptsFirstResponder: Bool { true }
@@ -124,10 +121,16 @@ class ScrollScreenshotOverlayView: NSView {
             context.fill(rightRect)
         }
         
-        // Draw selection border: clean white dashed rectangle (always white)
+        // Draw selection border: white dash-dotted line with black stroke backing for maximum contrast
+        context.setStrokeColor(NSColor.black.cgColor)
+        context.setLineWidth(2.0)
+        context.setLineDash(phase: 0, lengths: [])
+        context.stroke(selectionRect)
+        
         context.setStrokeColor(NSColor.white.cgColor)
         context.setLineWidth(1.5)
-        context.setLineDash(phase: 0, lengths: [5, 4])
+        // Dash-dot pattern: dash(6), gap(3), dot(2), gap(3)
+        context.setLineDash(phase: 0, lengths: [6, 3, 2, 3])
         context.stroke(selectionRect)
         context.setLineDash(phase: 0, lengths: [])
         
@@ -167,12 +170,12 @@ class ScrollScreenshotOverlayView: NSView {
         ]
     }
     
-    // MARK: - Native macOS HUD Control Bar (Matching Provided Design)
+    // MARK: - Native macOS HUD Control Bar (Simple Clean Bar with One Capture Button)
     
     private func drawHUDControlBar(context: CGContext) {
-        let barWidth: CGFloat = 260
-        let barHeight: CGFloat = 46
-        let cornerRadius: CGFloat = 16
+        let barWidth: CGFloat = 142
+        let barHeight: CGFloat = 44
+        let cornerRadius: CGFloat = 14
         
         var barX = selectionRect.midX - barWidth / 2
         var barY = selectionRect.minY - barHeight - 16
@@ -194,7 +197,7 @@ class ScrollScreenshotOverlayView: NSView {
         context.setShadow(offset: CGSize(width: 0, height: -4), blur: 14, color: NSColor.black.withAlphaComponent(0.55).cgColor)
         
         let barPath = CGPath(roundedRect: hudBarRect, cornerWidth: cornerRadius, cornerHeight: cornerRadius, transform: nil)
-        context.setFillColor(NSColor(calibratedWhite: 0.14, alpha: 0.92).cgColor)
+        context.setFillColor(NSColor(calibratedWhite: 0.14, alpha: 0.94).cgColor)
         context.addPath(barPath)
         context.fillPath()
         context.restoreGState()
@@ -207,7 +210,7 @@ class ScrollScreenshotOverlayView: NSView {
         
         // 2. Button 1: Close (x) circle button on the left
         let closeBtnSize: CGFloat = 22
-        let closeBtnX = barX + 14
+        let closeBtnX = barX + 12
         let closeBtnY = barY + (barHeight - closeBtnSize) / 2
         closeButtonRect = NSRect(x: closeBtnX, y: closeBtnY, width: closeBtnSize, height: closeBtnSize)
         
@@ -226,7 +229,7 @@ class ScrollScreenshotOverlayView: NSView {
         }
         
         // 3. Vertical Separator
-        let sepX = closeButtonRect.maxX + 14
+        let sepX = closeButtonRect.maxX + 10
         let sepY = barY + 12
         let sepHeight: CGFloat = barHeight - 24
         context.setStrokeColor(NSColor.white.withAlphaComponent(0.16).cgColor)
@@ -235,32 +238,14 @@ class ScrollScreenshotOverlayView: NSView {
         context.addLine(to: CGPoint(x: sepX, y: sepY + sepHeight))
         context.strokePath()
         
-        // 4. Button 2: Options ⌵ dropdown button
-        let optionsX = sepX + 12
-        let optionsWidth: CGFloat = 88
-        optionsButtonRect = NSRect(x: optionsX, y: barY + 6, width: optionsWidth, height: barHeight - 12)
-        
-        let dirLabel = scrollDirection == .vertical ? "Options ⌵" : "Options (X) ⌵"
-        let optionsText = dirLabel as NSString
-        let optionsAttrs: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: 13, weight: .medium),
-            .foregroundColor: NSColor.white.withAlphaComponent(0.9)
-        ]
-        let optSize = optionsText.size(withAttributes: optionsAttrs)
-        let optPoint = NSPoint(
-            x: optionsButtonRect.midX - optSize.width / 2,
-            y: optionsButtonRect.midY - optSize.height / 2
-        )
-        optionsText.draw(at: optPoint, withAttributes: optionsAttrs)
-        
-        // 5. Button 3: Capture blue pill button on the right
-        let capWidth: CGFloat = 82
-        let capHeight: CGFloat = 32
-        let capX = barX + barWidth - capWidth - 8
+        // 4. Button 2: Capture vibrant blue pill button on the right
+        let capWidth: CGFloat = 78
+        let capHeight: CGFloat = 30
+        let capX = sepX + 10
         let capY = barY + (barHeight - capHeight) / 2
         captureButtonRect = NSRect(x: capX, y: capY, width: capWidth, height: capHeight)
         
-        let capPath = CGPath(roundedRect: captureButtonRect, cornerWidth: 9, cornerHeight: 9, transform: nil)
+        let capPath = CGPath(roundedRect: captureButtonRect, cornerWidth: 8, cornerHeight: 8, transform: nil)
         // Vibrant system blue
         context.setFillColor(NSColor(calibratedRed: 0.0, green: 0.58, blue: 1.0, alpha: 1.0).cgColor)
         context.addPath(capPath)
@@ -279,45 +264,6 @@ class ScrollScreenshotOverlayView: NSView {
         capText.draw(at: capPoint, withAttributes: capAttrs)
     }
     
-    // MARK: - Options Menu
-    
-    private func showOptionsMenu(at event: NSEvent) {
-        let menu = NSMenu(title: "Scroll Options")
-        
-        let verticalItem = NSMenuItem(
-            title: "Vertical Scroll (Y-Axis)",
-            action: #selector(selectVerticalDirection),
-            keyEquivalent: ""
-        )
-        verticalItem.target = self
-        verticalItem.state = scrollDirection == .vertical ? .on : .off
-        menu.addItem(verticalItem)
-        
-        let horizontalItem = NSMenuItem(
-            title: "Horizontal Scroll (X-Axis)",
-            action: #selector(selectHorizontalDirection),
-            keyEquivalent: ""
-        )
-        horizontalItem.target = self
-        horizontalItem.state = scrollDirection == .horizontal ? .on : .off
-        menu.addItem(horizontalItem)
-        
-        let point = NSPoint(x: optionsButtonRect.minX, y: optionsButtonRect.minY)
-        menu.popUp(positioning: nil, at: point, in: self)
-    }
-    
-    @objc private func selectVerticalDirection() {
-        scrollDirection = .vertical
-        ScrollScreenshotController.shared.scrollDirection = .vertical
-        needsDisplay = true
-    }
-    
-    @objc private func selectHorizontalDirection() {
-        scrollDirection = .horizontal
-        ScrollScreenshotController.shared.scrollDirection = .horizontal
-        needsDisplay = true
-    }
-    
     // MARK: - Mouse Handling
     
     override func mouseDown(with event: NSEvent) {
@@ -331,13 +277,7 @@ class ScrollScreenshotOverlayView: NSView {
             return
         }
         
-        // 2. Options button
-        if optionsButtonRect.contains(point) {
-            showOptionsMenu(at: event)
-            return
-        }
-        
-        // 3. Capture button
+        // 2. Capture button
         if captureButtonRect.contains(point) {
             onCapture?()
             return
@@ -348,7 +288,7 @@ class ScrollScreenshotOverlayView: NSView {
             return
         }
         
-        // 4. Resize handles
+        // 3. Resize handles
         let handles = getHandleRects()
         let modes: [DragMode] = [
             .resizeTopLeft, .resizeTop, .resizeTopRight,
@@ -367,7 +307,7 @@ class ScrollScreenshotOverlayView: NSView {
             }
         }
         
-        // 5. Move selection
+        // 4. Move selection
         if selectionRect.contains(point) {
             dragMode = .move
             dragStartPoint = point
@@ -375,66 +315,115 @@ class ScrollScreenshotOverlayView: NSView {
             return
         }
         
-        // Click outside everything before capture: cancel
-        onCancel?()
+        // 5. Start a new selection if clicked outside
+        dragMode = .resizeBottomRight
+        dragStartPoint = point
+        selectionRect = NSRect(x: point.x, y: point.y, width: 0, height: 0)
+        dragStartRect = selectionRect
     }
     
     override func mouseDragged(with event: NSEvent) {
         guard !isLocked && !isCapturing else { return }
+        guard dragMode != .none else { return }
+        
         let point = convert(event.locationInWindow, from: nil)
-        let dx = point.x - dragStartPoint.x
-        let dy = point.y - dragStartPoint.y
+        let deltaX = point.x - dragStartPoint.x
+        let deltaY = point.y - dragStartPoint.y
+        
+        var newRect = dragStartRect
         
         switch dragMode {
-        case .move:
-            var newRect = dragStartRect.offsetBy(dx: dx, dy: dy)
-            newRect.origin.x = max(0, min(newRect.origin.x, bounds.width - newRect.width))
-            newRect.origin.y = max(0, min(newRect.origin.y, bounds.height - newRect.height))
-            selectionRect = newRect
-            
-        case .resizeTopLeft:
-            let newX = min(dragStartRect.maxX - minSelectionSize, dragStartRect.minX + dx)
-            let newMaxY = max(dragStartRect.minY + minSelectionSize, dragStartRect.maxY + dy)
-            selectionRect = NSRect(x: newX, y: dragStartRect.minY, width: dragStartRect.maxX - newX, height: newMaxY - dragStartRect.minY)
-            
-        case .resizeTop:
-            let newMaxY = max(dragStartRect.minY + minSelectionSize, dragStartRect.maxY + dy)
-            selectionRect = NSRect(x: dragStartRect.minX, y: dragStartRect.minY, width: dragStartRect.width, height: newMaxY - dragStartRect.minY)
-            
-        case .resizeTopRight:
-            let newMaxX = max(dragStartRect.minX + minSelectionSize, dragStartRect.maxX + dx)
-            let newMaxY = max(dragStartRect.minY + minSelectionSize, dragStartRect.maxY + dy)
-            selectionRect = NSRect(x: dragStartRect.minX, y: dragStartRect.minY, width: newMaxX - dragStartRect.minX, height: newMaxY - dragStartRect.minY)
-            
-        case .resizeLeft:
-            let newX = min(dragStartRect.maxX - minSelectionSize, dragStartRect.minX + dx)
-            selectionRect = NSRect(x: newX, y: dragStartRect.minY, width: dragStartRect.maxX - newX, height: dragStartRect.height)
-            
-        case .resizeRight:
-            let newMaxX = max(dragStartRect.minX + minSelectionSize, dragStartRect.maxX + dx)
-            selectionRect = NSRect(x: dragStartRect.minX, y: dragStartRect.minY, width: newMaxX - dragStartRect.minX, height: dragStartRect.height)
-            
-        case .resizeBottomLeft:
-            let newX = min(dragStartRect.maxX - minSelectionSize, dragStartRect.minX + dx)
-            let newY = min(dragStartRect.maxY - minSelectionSize, dragStartRect.minY + dy)
-            selectionRect = NSRect(x: newX, y: newY, width: dragStartRect.maxX - newX, height: dragStartRect.maxY - newY)
-            
-        case .resizeBottom:
-            let newY = min(dragStartRect.maxY - minSelectionSize, dragStartRect.minY + dy)
-            selectionRect = NSRect(x: dragStartRect.minX, y: newY, width: dragStartRect.width, height: dragStartRect.maxY - newY)
-            
-        case .resizeBottomRight:
-            let newMaxX = max(dragStartRect.minX + minSelectionSize, dragStartRect.maxX + dx)
-            let newY = min(dragStartRect.maxY - minSelectionSize, dragStartRect.minY + dy)
-            selectionRect = NSRect(x: dragStartRect.minX, y: newY, width: newMaxX - dragStartRect.minX, height: dragStartRect.maxY - newY)
-            
         case .none:
             break
+            
+        case .move:
+            newRect.origin.x += deltaX
+            newRect.origin.y += deltaY
+            // Clamp to window bounds
+            newRect.origin.x = max(0, min(newRect.origin.x, bounds.width - newRect.width))
+            newRect.origin.y = max(0, min(newRect.origin.y, bounds.height - newRect.height))
+            
+        case .resizeTopLeft:
+            newRect.origin.x += deltaX
+            newRect.size.width -= deltaX
+            newRect.size.height += deltaY
+            
+        case .resizeTop:
+            newRect.size.height += deltaY
+            
+        case .resizeTopRight:
+            newRect.size.width += deltaX
+            newRect.size.height += deltaY
+            
+        case .resizeLeft:
+            newRect.origin.x += deltaX
+            newRect.size.width -= deltaX
+            
+        case .resizeRight:
+            newRect.size.width += deltaX
+            
+        case .resizeBottomLeft:
+            newRect.origin.x += deltaX
+            newRect.size.width -= deltaX
+            newRect.origin.y += deltaY
+            newRect.size.height -= deltaY
+            
+        case .resizeBottom:
+            newRect.origin.y += deltaY
+            newRect.size.height -= deltaY
+            
+        case .resizeBottomRight:
+            newRect.size.width += deltaX
+            newRect.origin.y += deltaY
+            newRect.size.height -= deltaY
+        }
+        
+        // Normalize rect (handle negative width/height)
+        var normalized = newRect
+        if normalized.size.width < 0 {
+            normalized.origin.x += normalized.size.width
+            normalized.size.width = abs(normalized.size.width)
+        }
+        if normalized.size.height < 0 {
+            normalized.origin.y += normalized.size.height
+            normalized.size.height = abs(normalized.size.height)
+        }
+        
+        // Enforce minimum size
+        if normalized.size.width >= minSelectionSize && normalized.size.height >= minSelectionSize {
+            selectionRect = normalized
         }
     }
     
     override func mouseUp(with event: NSEvent) {
         dragMode = .none
+        window?.invalidateCursorRects(for: self)
+    }
+    
+    override func resetCursorRects() {
+        super.resetCursorRects()
+        
+        guard !isLocked && !isCapturing else { return }
+        
+        // Move cursor for inside selection
+        addCursorRect(selectionRect, cursor: .openHand)
+        
+        // Resize cursors for handles
+        let handles = getHandleRects()
+        if handles.count >= 8 {
+            addCursorRect(handles[0], cursor: .crosshair) // TL
+            addCursorRect(handles[1], cursor: .resizeUpDown) // T
+            addCursorRect(handles[2], cursor: .crosshair) // TR
+            addCursorRect(handles[3], cursor: .resizeLeftRight) // L
+            addCursorRect(handles[4], cursor: .resizeLeftRight) // R
+            addCursorRect(handles[5], cursor: .crosshair) // BL
+            addCursorRect(handles[6], cursor: .resizeUpDown) // B
+            addCursorRect(handles[7], cursor: .crosshair) // BR
+        }
+        
+        // Pointing hand for buttons in HUD bar
+        addCursorRect(closeButtonRect, cursor: .pointingHand)
+        addCursorRect(captureButtonRect, cursor: .pointingHand)
     }
     
     override func keyDown(with event: NSEvent) {
@@ -442,54 +431,28 @@ class ScrollScreenshotOverlayView: NSView {
             onCancel?()
             return
         }
-        super.keyDown(with: event)
-    }
-    
-    override func resetCursorRects() {
-        super.resetCursorRects()
-        
-        if isCapturing {
-            addCursorRect(bounds, cursor: .cameraCursor)
+        if event.keyCode == 36 { // Return / Enter
+            onCapture?()
             return
         }
-        
-        guard !isLocked else { return }
-        
-        let handles = getHandleRects()
-        let cursors: [NSCursor] = [
-            .crosshair,
-            .resizeUpDown,
-            .crosshair,
-            .resizeLeftRight,
-            .resizeLeftRight,
-            .crosshair,
-            .resizeUpDown,
-            .crosshair,
-        ]
-        
-        for (i, rect) in handles.enumerated() {
-            let expanded = rect.insetBy(dx: -4, dy: -4)
-            addCursorRect(expanded, cursor: cursors[i])
-        }
-        
-        addCursorRect(selectionRect, cursor: .openHand)
+        super.keyDown(with: event)
     }
 }
 
-// MARK: - Overlay Window
+// MARK: - Overlay Window Controller
 
-/// A full-screen transparent window used for the scroll screenshot selection overlay.
+/// Full-screen transparent overlay window that displays the selection UI.
 public class ScrollScreenshotOverlayWindow: NSWindow {
     
-    var overlayView: ScrollScreenshotOverlayView!
+    let overlayView: ScrollScreenshotOverlayView
     
-    /// Creates a full-screen overlay window on the given screen.
     public init(screen: NSScreen) {
-        let screenFrame = screen.frame
+        let frame = screen.frame
+        self.overlayView = ScrollScreenshotOverlayView(frame: NSRect(origin: .zero, size: frame.size))
         
         super.init(
-            contentRect: screenFrame,
-            styleMask: [.borderless],
+            contentRect: frame,
+            styleMask: [.borderless, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
@@ -500,21 +463,15 @@ public class ScrollScreenshotOverlayWindow: NSWindow {
         self.hasShadow = false
         self.ignoresMouseEvents = false
         self.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        self.contentView = overlayView
         self.isReleasedWhenClosed = false
         
-        // Create the overlay view
-        overlayView = ScrollScreenshotOverlayView(frame: NSRect(origin: .zero, size: screenFrame.size))
-        overlayView.autoresizingMask = [.width, .height]
-        
-        // Center the default selection on the screen
-        let selWidth: CGFloat = min(500, screenFrame.width * 0.5)
-        let selHeight: CGFloat = min(400, screenFrame.height * 0.5)
-        let selX = (screenFrame.width - selWidth) / 2
-        let selY = (screenFrame.height - selHeight) / 2
-        overlayView.selectionRect = NSRect(x: selX, y: selY, width: selWidth, height: selHeight)
-        
-        self.contentView = overlayView
-        self.setFrame(screenFrame, display: true)
+        // Position selection rectangle in the center of the screen initially
+        let defaultWidth: CGFloat = 600
+        let defaultHeight: CGFloat = 450
+        let defaultX = (frame.width - defaultWidth) / 2
+        let defaultY = (frame.height - defaultHeight) / 2
+        overlayView.selectionRect = NSRect(x: defaultX, y: defaultY, width: defaultWidth, height: defaultHeight)
     }
     
     public override var canBecomeKey: Bool { true }

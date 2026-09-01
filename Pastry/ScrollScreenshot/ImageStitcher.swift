@@ -3,8 +3,7 @@ import AppKit
 import CoreGraphics
 import Vision
 
-/// Image-processing logic for stitching overlapping screenshot frames into one
-/// tall (vertical) or wide (horizontal) image.
+/// Image-processing logic for stitching overlapping screenshot frames into one continuous vertical image.
 ///
 /// Uses Apple Vision `VNTranslationalImageRegistrationRequest` for sub-pixel
 /// accurate frame alignment instead of brute-force pixel comparison.
@@ -13,7 +12,6 @@ public struct ImageStitcher {
     /// Scroll capture direction.
     public enum StitchDirection: String, Codable {
         case vertical
-        case horizontal
     }
     
     /// The result of stitching multiple frames together.
@@ -56,12 +54,12 @@ public struct ImageStitcher {
     
     // MARK: - Public API: Batch Stitching (collects all frames, stitches at the end)
     
-    /// Stitches an array of captured CGImages into one continuous image.
+    /// Stitches an array of captured CGImages into one continuous vertical image.
     /// Uses Vision-based alignment to detect the actual overlap between consecutive frames.
     ///
     /// - Parameters:
     ///   - frames: Array of CGImage frames captured during scrolling. Must contain at least 1 frame.
-    ///   - direction: `.vertical` (default) or `.horizontal`.
+    ///   - direction: `.vertical` (default).
     /// - Returns: A `StitchResult` with the final stitched image, or nil if stitching fails.
     public static func stitch(frames: [CGImage], direction: StitchDirection = .vertical) -> StitchResult? {
         guard !frames.isEmpty else { return nil }
@@ -78,12 +76,7 @@ public struct ImageStitcher {
             )
         }
         
-        switch direction {
-        case .vertical:
-            return stitchVertical(frames: frames)
-        case .horizontal:
-            return stitchHorizontal(frames: frames)
-        }
+        return stitchVertical(frames: frames)
     }
     
     // MARK: - Vision-Based Translation Detection
@@ -246,66 +239,6 @@ public struct ImageStitcher {
             frameCount: frameCount,
             totalWidth: stitchedImage.width,
             totalHeight: stitchedImage.height
-        )
-    }
-    
-    // MARK: - Horizontal Stitching (uses legacy pixel overlap for now)
-    
-    private static func stitchHorizontal(frames: [CGImage]) -> StitchResult? {
-        var overlaps: [Int] = []
-        for i in 0..<(frames.count - 1) {
-            let overlap = findHorizontalOverlap(left: frames[i], right: frames[i + 1])
-            overlaps.append(overlap)
-        }
-        
-        var totalWidth = frames[0].width
-        for i in 1..<frames.count {
-            let newCols = frames[i].width - overlaps[i - 1]
-            if newCols > 0 {
-                totalWidth += newCols
-            }
-        }
-        
-        let height = frames[0].height
-        
-        guard let context = CGContext(
-            data: nil,
-            width: totalWidth,
-            height: height,
-            bitsPerComponent: 8,
-            bytesPerRow: 0,
-            space: CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ) else { return nil }
-        
-        // Draw first frame at the left
-        context.draw(frames[0], in: CGRect(x: 0, y: 0, width: frames[0].width, height: height))
-        var currentX = frames[0].width
-        
-        // Draw subsequent frames, skipping the overlapping left portion
-        for i in 1..<frames.count {
-            let overlap = overlaps[i - 1]
-            let newCols = frames[i].width - overlap
-            guard newCols > 0 else { continue }
-            
-            // In CGImage, x=0 is the LEFT. Skip left `overlap` columns, keep right `newCols` columns.
-            let cropRect = CGRect(x: overlap, y: 0, width: newCols, height: height)
-            guard let croppedImage = frames[i].cropping(to: cropRect) else { continue }
-            
-            // Draw immediately adjacent to the previous content
-            context.draw(croppedImage, in: CGRect(x: currentX, y: 0, width: newCols, height: height))
-            currentX += newCols
-        }
-        
-        guard let stitchedImage = context.makeImage() else { return nil }
-        guard let data = pngData(from: stitchedImage) else { return nil }
-        
-        return StitchResult(
-            image: stitchedImage,
-            pngData: data,
-            frameCount: frames.count,
-            totalWidth: totalWidth,
-            totalHeight: height
         )
     }
     
@@ -502,88 +435,6 @@ public struct ImageStitcher {
         }
         // Fallback to legacy
         return findOverlapLegacy(top: top, bottom: bottom)
-    }
-    
-    // MARK: - Horizontal Overlap Detection (legacy pixel-based)
-    
-    /// Finds the horizontal overlap between the right side of `left` image and the left side of `right` image.
-    /// Uses normalized mean absolute difference per sampled pixel to ensure scale-independent accuracy.
-    public static func findHorizontalOverlap(left: CGImage, right: CGImage) -> Int {
-        guard left.height == right.height else { return 0 }
-        
-        let height = left.height
-        let leftWidth = left.width
-        let rightWidth = right.width
-        
-        let minOverlap = max(8, min(leftWidth, rightWidth) / 20)
-        let maxOverlap = min(leftWidth, rightWidth) * 95 / 100
-        guard maxOverlap > minOverlap else { return 0 }
-        
-        guard let leftData = pixelData(from: left),
-              let rightData = pixelData(from: right) else { return 0 }
-        
-        let leftBytesPerRow = leftWidth * 4
-        let rightBytesPerRow = rightWidth * 4
-        let bytesPerPixel = 4
-        
-        // Sample dense rows (up to 48 rows across the height)
-        let numSampleRows = min(height, max(16, height / 16))
-        var sampleRows: [Int] = []
-        let rowStep = max(1, height / numSampleRows)
-        var r = rowStep / 2
-        while r < height {
-            sampleRows.append(r)
-            r += rowStep
-        }
-        if sampleRows.isEmpty { sampleRows = [height / 2] }
-        
-        var bestOverlap = 0
-        var bestScore = Double.infinity
-        
-        leftData.withUnsafeBytes { leftPtr in
-            rightData.withUnsafeBytes { rightPtr in
-                guard let leftBase = leftPtr.baseAddress?.assumingMemoryBound(to: UInt8.self),
-                      let rightBase = rightPtr.baseAddress?.assumingMemoryBound(to: UInt8.self) else { return }
-                
-                let numRows = sampleRows.count
-                let channels = 3
-                
-                for w in minOverlap...maxOverlap {
-                    var diffSum = 0
-                    
-                    for col in 0..<w {
-                        let leftCol = leftWidth - w + col
-                        let rightCol = col
-                        
-                        for rIdx in 0..<numRows {
-                            let row = sampleRows[rIdx]
-                            let leftPixelOffset = row * leftBytesPerRow + leftCol * bytesPerPixel
-                            let rightPixelOffset = row * rightBytesPerRow + rightCol * bytesPerPixel
-                            
-                            for c in 0..<channels {
-                                let leftVal = Int(leftBase[leftPixelOffset + c])
-                                let rightVal = Int(rightBase[rightPixelOffset + c])
-                                diffSum += abs(leftVal - rightVal)
-                            }
-                        }
-                    }
-                    
-                    let totalSamples = w * numRows * channels
-                    let score = Double(diffSum) / Double(totalSamples)
-                    
-                    if score < bestScore {
-                        bestScore = score
-                        bestOverlap = w
-                    }
-                }
-            }
-        }
-        
-        if bestScore > 25.0 {
-            return 0
-        }
-        
-        return bestOverlap
     }
     
     // MARK: - Helpers

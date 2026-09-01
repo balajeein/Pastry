@@ -43,23 +43,6 @@ public struct ScrollScreenshotTests {
             return context.makeImage()!
         }
         
-        // Helper to create an image with vertical colored stripes (for horizontal scrolling test)
-        func makeVerticalStripedImage(height: Int, stripeWidth: Int, stripeColors: [NSColor]) -> CGImage {
-            let width = stripeWidth * stripeColors.count
-            guard let context = CGContext(
-                data: nil, width: width, height: height,
-                bitsPerComponent: 8, bytesPerRow: width * 4,
-                space: CGColorSpaceCreateDeviceRGB(),
-                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-            ) else { fatalError("Failed to create CGContext") }
-            
-            for (i, color) in stripeColors.enumerated() {
-                context.setFillColor(color.cgColor)
-                context.fill(CGRect(x: i * stripeWidth, y: 0, width: stripeWidth, height: height))
-            }
-            return context.makeImage()!
-        }
-        
         // ────────────────────────────────────────────────────────────────
         // TEST 1: Single frame stitch returns the frame unchanged
         // ────────────────────────────────────────────────────────────────
@@ -118,42 +101,15 @@ public struct ScrollScreenshotTests {
         check(!bandResult!.pngData.isEmpty, "TEST 6: PNG data must not be empty")
         
         // ────────────────────────────────────────────────────────────────
-        // TEST 7: Horizontal Overlap Detection & Stitching
-        // ────────────────────────────────────────────────────────────────
-        let stripeW = 40
-        // Frame H1: stripes [red, green, blue] (left to right)
-        // Frame H2: stripes [green, blue, yellow] (left to right)
-        // Overlap: green + blue = 2 stripes
-        let hFrame1 = makeVerticalStripedImage(height: 100, stripeWidth: stripeW, stripeColors: [.red, .green, .blue])
-        let hFrame2 = makeVerticalStripedImage(height: 100, stripeWidth: stripeW, stripeColors: [.green, .blue, .yellow])
-        
-        let hOverlap = ImageStitcher.findHorizontalOverlap(left: hFrame1, right: hFrame2)
-        let expectedHOverlap = stripeW * 2
-        check(hOverlap >= stripeW && hOverlap <= stripeW * 3, "TEST 7: Horizontal overlap should be around \(expectedHOverlap) px (got \(hOverlap))")
-        
-        let hResult = ImageStitcher.stitch(frames: [hFrame1, hFrame2], direction: .horizontal)
-        check(hResult != nil, "TEST 7: Horizontal stitch must succeed")
-        check(hResult!.frameCount == 2, "TEST 7: Horizontal frame count must be 2")
-        let expectedWidth = hFrame1.width + hFrame2.width - hOverlap
-        check(hResult!.totalWidth == expectedWidth, "TEST 7: Horizontal total width should be \(expectedWidth) (got \(hResult!.totalWidth))")
-        check(hResult!.totalHeight == 100, "TEST 7: Horizontal height should remain unchanged")
-        check(!hResult!.pngData.isEmpty, "TEST 7: Horizontal PNG data must not be empty")
-        
-        // ────────────────────────────────────────────────────────────────
-        // TEST 8: Different-dimension frames handled gracefully
+        // TEST 7: Different-dimension frames handled gracefully
         // ────────────────────────────────────────────────────────────────
         let wideFrame = makeImage(width: 200, height: 100, color: .orange)
         let narrowFrame = makeImage(width: 150, height: 100, color: .orange)
         let mismatchOverlap = ImageStitcher.findOverlapLegacy(top: wideFrame, bottom: narrowFrame)
-        check(mismatchOverlap == 0, "TEST 8: Different-width frames should return 0 vertical overlap")
-        
-        let tallFrame = makeImage(width: 100, height: 200, color: .orange)
-        let shortFrame = makeImage(width: 100, height: 150, color: .orange)
-        let mismatchHOverlap = ImageStitcher.findHorizontalOverlap(left: tallFrame, right: shortFrame)
-        check(mismatchHOverlap == 0, "TEST 8: Different-height frames should return 0 horizontal overlap")
+        check(mismatchOverlap == 0, "TEST 7: Different-width frames should return 0 vertical overlap")
         
         // ────────────────────────────────────────────────────────────────
-        // TEST 9: appendFrame produces correct dimensions
+        // TEST 8: appendFrame produces correct dimensions
         // ────────────────────────────────────────────────────────────────
         let baseImg = makeImage(width: 200, height: 300, color: .blue)
         let newImg = makeImage(width: 200, height: 300, color: .red)
@@ -161,27 +117,27 @@ public struct ScrollScreenshotTests {
         
         let appendResult = ImageStitcher.appendFrame(baseImage: baseImg, newFrame: newImg,
                                                       displacementPixels: displacement)
-        check(appendResult != nil, "TEST 9: appendFrame must succeed")
-        check(appendResult!.width == 200, "TEST 9: Width must match (got \(appendResult!.width))")
-        check(appendResult!.height == 400, "TEST 9: Height must be 300 + 100 = 400 (got \(appendResult!.height))")
+        check(appendResult != nil, "TEST 8: appendFrame must succeed")
+        check(appendResult!.width == 200, "TEST 8: Width must match (got \(appendResult!.width))")
+        check(appendResult!.height == 400, "TEST 8: Height must be 300 + 100 = 400 (got \(appendResult!.height))")
         
         // ────────────────────────────────────────────────────────────────
-        // TEST 10: appendFrame with mismatched width returns nil
+        // TEST 9: appendFrame with mismatched width returns nil
         // ────────────────────────────────────────────────────────────────
         let mismatchNewFrame = makeImage(width: 150, height: 300, color: .red)
         let mismatchAppend = ImageStitcher.appendFrame(baseImage: baseImg, newFrame: mismatchNewFrame,
                                                         displacementPixels: 100)
-        check(mismatchAppend == nil, "TEST 10: appendFrame with different width must return nil")
+        check(mismatchAppend == nil, "TEST 9: appendFrame with different width must return nil")
         
         // ────────────────────────────────────────────────────────────────
-        // TEST 11: appendFrame with zero displacement returns nil
+        // TEST 10: appendFrame with zero displacement returns nil
         // ────────────────────────────────────────────────────────────────
         let zeroAppend = ImageStitcher.appendFrame(baseImage: baseImg, newFrame: newImg,
                                                     displacementPixels: 0)
-        check(zeroAppend == nil, "TEST 11: appendFrame with zero displacement must return nil")
+        check(zeroAppend == nil, "TEST 10: appendFrame with zero displacement must return nil")
         
         // ────────────────────────────────────────────────────────────────
-        // TEST 12: Multi-frame incremental stitch accumulates height correctly
+        // TEST 11: Multi-frame incremental stitch accumulates height correctly
         // ────────────────────────────────────────────────────────────────
         var accumulated = makeImage(width: 100, height: 200, color: .blue)
         let increments = [50, 75, 30, 60]
@@ -193,28 +149,28 @@ public struct ScrollScreenshotTests {
             ))
             guard let result = ImageStitcher.appendFrame(baseImage: accumulated, newFrame: nextFrame,
                                                           displacementPixels: disp) else {
-                check(false, "TEST 12: appendFrame iteration \(i) must succeed")
+                check(false, "TEST 11: appendFrame iteration \(i) must succeed")
                 return
             }
             expectedTotal += disp
             accumulated = result
         }
         
-        check(accumulated.width == 100, "TEST 12: Final width must be 100 (got \(accumulated.width))")
-        check(accumulated.height == expectedTotal, "TEST 12: Final height must be \(expectedTotal) (got \(accumulated.height))")
+        check(accumulated.width == 100, "TEST 11: Final width must be 100 (got \(accumulated.width))")
+        check(accumulated.height == expectedTotal, "TEST 11: Final height must be \(expectedTotal) (got \(accumulated.height))")
         
         // ────────────────────────────────────────────────────────────────
-        // TEST 13: detectTranslation returns nil for mismatched dimensions
+        // TEST 12: detectTranslation returns nil for mismatched dimensions
         // ────────────────────────────────────────────────────────────────
         let transResult = ImageStitcher.detectTranslation(from: wideFrame, to: narrowFrame)
-        check(transResult == nil, "TEST 13: detectTranslation with different dimensions must return nil")
+        check(transResult == nil, "TEST 12: detectTranslation with different dimensions must return nil")
         
         // ────────────────────────────────────────────────────────────────
-        // TEST 14: pngData conversion works
+        // TEST 13: pngData conversion works
         // ────────────────────────────────────────────────────────────────
         let pngResult = ImageStitcher.pngData(from: singleFrame)
-        check(pngResult != nil, "TEST 14: pngData must succeed")
-        check(!pngResult!.isEmpty, "TEST 14: pngData must not be empty")
+        check(pngResult != nil, "TEST 13: pngData must succeed")
+        check(!pngResult!.isEmpty, "TEST 13: pngData must not be empty")
         
         print("✅ ScrollScreenshotTests passed successfully!")
     }

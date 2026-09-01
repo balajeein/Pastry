@@ -19,9 +19,6 @@ public class ScrollScreenshotController {
     private var previousFrame: CGImage?
     private var stitchedFrameCount: Int = 0
     
-    /// Scroll capture direction (defaults to vertical, can be set to horizontal via Options)
-    public var scrollDirection: ImageStitcher.StitchDirection = .vertical
-    
     private var stopGlobalMonitor: Any?
     private var stopLocalMonitor: Any?
     
@@ -100,7 +97,6 @@ public class ScrollScreenshotController {
     
     private func showOverlay(on screen: NSScreen) {
         let overlay = ScrollScreenshotOverlayWindow(screen: screen)
-        overlay.overlayView.scrollDirection = self.scrollDirection
         
         overlay.overlayView.onCapture = { [weak self] in
             self?.beginCaptureLoop()
@@ -189,24 +185,16 @@ public class ScrollScreenshotController {
         let captureRect = overlay.selectionInScreenCoordinates()
         let scrollCenter = overlay.selectionCenterInCGCoordinates()
         let overlayWindowNumber = overlay.windowNumber
-        let direction = self.scrollDirection
         
-        // Calculate proportional scroll step (approx 45% of dimension)
-        let rawDelta: Int32
-        switch direction {
-        case .vertical:
-            rawDelta = Int32(max(80, min(260, captureRect.height * 0.45)))
-        case .horizontal:
-            rawDelta = Int32(max(80, min(260, captureRect.width * 0.45)))
-        }
-        let scrollDelta: Int32 = -rawDelta // Negative for scrolling down/right
+        // Calculate proportional vertical scroll step (approx 45% of height)
+        let rawDelta: Int32 = Int32(max(80, min(260, captureRect.height * 0.45)))
+        let scrollDelta: Int32 = -rawDelta // Negative for scrolling down
         
         // 3. Identify and activate the target application
         let targetInfo = identifyTargetApplication(at: scrollCenter)
         let targetPID = targetInfo?.pid
         let targetApp = targetInfo?.app
         
-        print("[ScrollScreenshot] Direction: \(direction.rawValue)")
         print("[ScrollScreenshot] Target PID: \(targetPID ?? 0) (\(targetApp?.localizedName ?? "Unknown"))")
         print("[ScrollScreenshot] Capture region: \(captureRect)")
         
@@ -233,7 +221,6 @@ public class ScrollScreenshotController {
                 captureRect: captureRect,
                 scrollCenter: scrollCenter,
                 scrollDelta: scrollDelta,
-                direction: direction,
                 targetPID: targetPID,
                 overlayWindowNumber: overlayWindowNumber
             )
@@ -278,7 +265,6 @@ public class ScrollScreenshotController {
         captureRect: CGRect,
         scrollCenter: CGPoint,
         scrollDelta: Int32,
-        direction: ImageStitcher.StitchDirection,
         targetPID: pid_t?,
         overlayWindowNumber: Int
     ) {
@@ -365,8 +351,6 @@ public class ScrollScreenshotController {
                         }
                     } else {
                         print("[ScrollScreenshot] Vision translation invalid (dy=\(translation.dy), confidence=\(translation.confidence))")
-                        // Frame content changed but alignment failed — store as previousFrame
-                        // so next comparison has a better reference
                         previousFrame = frame
                         consecutiveFailureCount += 1
                     }
@@ -391,9 +375,9 @@ public class ScrollScreenshotController {
                 break
             }
             
-            // 4. Scroll in the requested direction
-            print("[ScrollScreenshot] Sending \(direction.rawValue) scroll: delta=\(scrollDelta) at \(scrollCenter)")
-            sendScrollEvent(at: scrollCenter, targetPID: targetPID, delta: scrollDelta, direction: direction)
+            // 4. Scroll vertically
+            print("[ScrollScreenshot] Sending vertical scroll: delta=\(scrollDelta) at \(scrollCenter)")
+            sendScrollEvent(at: scrollCenter, targetPID: targetPID, delta: scrollDelta)
             
             // 5. Wait for content to settle
             print("[ScrollScreenshot] Waiting for content...")
@@ -402,7 +386,7 @@ public class ScrollScreenshotController {
         
         print("[ScrollScreenshot] Capture loop finished. Total frames stitched: \(stitchedFrameCount)")
         DispatchQueue.main.async { [weak self] in
-            self?.finishCapture(direction: direction)
+            self?.finishCapture()
         }
     }
     
@@ -422,9 +406,8 @@ public class ScrollScreenshotController {
     
     // MARK: - Scroll Events
     
-    /// Sends a SINGLE pixel-based scroll event in the specified direction.
-    /// Only one event is posted to one destination to ensure predictable displacement.
-    private func sendScrollEvent(at point: CGPoint, targetPID: pid_t?, delta: Int32, direction: ImageStitcher.StitchDirection) {
+    /// Sends a SINGLE pixel-based vertical scroll event.
+    private func sendScrollEvent(at point: CGPoint, targetPID: pid_t?, delta: Int32) {
         let source = CGEventSource(stateID: .hidSystemState)
         
         // Move mouse cursor to the scroll center location
@@ -436,35 +419,16 @@ public class ScrollScreenshotController {
         // Small delay to let cursor position settle before scroll
         Thread.sleep(forTimeInterval: 0.02)
         
-        switch direction {
-        case .vertical:
-            // Single pixel-based vertical scroll event
-            if let scrollEvent = CGEvent(
-                scrollWheelEvent2Source: source,
-                units: .pixel,
-                wheelCount: 1,
-                wheel1: delta,
-                wheel2: 0,
-                wheel3: 0
-            ) {
-                scrollEvent.location = point
-                // Post only once — prefer HID tap for broadest app compatibility
-                scrollEvent.post(tap: .cghidEventTap)
-            }
-            
-        case .horizontal:
-            // Single pixel-based horizontal scroll event
-            if let scrollEvent = CGEvent(
-                scrollWheelEvent2Source: source,
-                units: .pixel,
-                wheelCount: 2,
-                wheel1: 0,
-                wheel2: delta,
-                wheel3: 0
-            ) {
-                scrollEvent.location = point
-                scrollEvent.post(tap: .cghidEventTap)
-            }
+        if let scrollEvent = CGEvent(
+            scrollWheelEvent2Source: source,
+            units: .pixel,
+            wheelCount: 1,
+            wheel1: delta,
+            wheel2: 0,
+            wheel3: 0
+        ) {
+            scrollEvent.location = point
+            scrollEvent.post(tap: .cghidEventTap)
         }
     }
     
@@ -490,11 +454,10 @@ public class ScrollScreenshotController {
     
     // MARK: - Finish & Stitch
     
-    private func finishCapture(direction: ImageStitcher.StitchDirection) {
+    private func finishCapture() {
         removeStopMonitors()
         
-        // For vertical direction with incremental stitching, use the already-built image
-        if direction == .vertical, let finalImage = stitchedImage, stitchedFrameCount > 0 {
+        if let finalImage = stitchedImage, stitchedFrameCount > 0 {
             let image = finalImage
             let frameCount = stitchedFrameCount
             cleanup()
@@ -522,7 +485,6 @@ public class ScrollScreenshotController {
             return
         }
         
-        // Fallback: batch stitch (horizontal direction or if incremental wasn't used)
         guard !capturedFrames.isEmpty else {
             cleanup()
             return
@@ -532,7 +494,7 @@ public class ScrollScreenshotController {
         cleanup()
         
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let result = ImageStitcher.stitch(frames: frames, direction: direction) else {
+            guard let result = ImageStitcher.stitch(frames: frames) else {
                 DispatchQueue.main.async {
                     self?.showErrorAlert(message: "Failed to stitch captured frames together.")
                 }

@@ -17,8 +17,9 @@ public class PastryPanel: NSPanel {
         self.titleVisibility = .hidden
         self.titlebarAppearsTransparent = true
         self.backgroundColor = .clear
+        self.isOpaque = false
         self.isMovableByWindowBackground = false
-        self.hasShadow = true
+        self.hasShadow = false
     }
     
     public override var canBecomeKey: Bool {
@@ -39,7 +40,7 @@ public class PastryPanel: NSPanel {
     
     public override func cancelOperation(_ sender: Any?) {
         // Dismiss on Escape key
-        self.close()
+        PastryPanelController.shared.closePanel()
     }
 }
 
@@ -47,7 +48,15 @@ public class PastryPanelController: NSObject, NSWindowDelegate {
     public static let shared = PastryPanelController()
     
     private var panel: PastryPanel?
+    private var hostingView: NSHostingView<PastryContainerView>?
     private var viewModel = ClipboardPanelViewModel()
+    
+    private static let windowWidth: CGFloat = 454
+    private static let windowHeight: CGFloat = 486
+    private static let cardWidth: CGFloat = 360
+    private static let cardHeight: CGFloat = 450
+    private static let padding: CGFloat = 18
+    private static let buttonAndSpacing: CGFloat = 46 + 12
     
     private override init() {
         super.init()
@@ -61,38 +70,43 @@ public class PastryPanelController: NSObject, NSWindowDelegate {
         viewModel.searchText = ""
         viewModel.selectedIndex = 0
         
+        let mouseLocation = NSEvent.mouseLocation
+        let activeScreen = findActiveScreen(at: mouseLocation)
+        let screenFrame = activeScreen.visibleFrame
+        
+        // Auto-adjust button side: if placing button on right would exceed screen right edge, place on left
+        let buttonSide: ScreenshotButtonSide
+        if mouseLocation.x + (Self.cardWidth / 2) + Self.buttonAndSpacing + Self.padding > screenFrame.maxX {
+            buttonSide = .left
+        } else {
+            buttonSide = .right
+        }
+        
+        let containerView = PastryContainerView(
+            viewModel: viewModel,
+            buttonSide: buttonSide,
+            onClose: { [weak self] in
+                self?.closePanel()
+            },
+            onScreenshot: { [weak self] in
+                self?.startScrollScreenshot()
+            }
+        )
+        
         if panel == nil {
-            let width: CGFloat = 360
-            let height: CGFloat = 450
-            let rect = NSRect(x: 0, y: 0, width: width, height: height)
-            
+            let rect = NSRect(x: 0, y: 0, width: Self.windowWidth, height: Self.windowHeight)
             let panel = PastryPanel(contentRect: rect)
             panel.delegate = self
             
-            // HUD visual effect background
-            let visualEffectView = NSVisualEffectView(frame: rect)
-            visualEffectView.material = .hudWindow
-            visualEffectView.state = .active
-            visualEffectView.blendingMode = .behindWindow
-            visualEffectView.autoresizingMask = [.width, .height]
-            visualEffectView.wantsLayer = true
-            visualEffectView.layer?.cornerRadius = 16
-            visualEffectView.layer?.masksToBounds = true
-            
-            // Embed ClipboardPanelView using our shared viewModel
-            let contentView = ClipboardPanelView(viewModel: viewModel) { [weak self] in
-                self?.closePanel()
-            }
-            let hostingView = NSHostingView(rootView: contentView)
-            hostingView.frame = rect
-            hostingView.autoresizingMask = [.width, .height]
-            
-            visualEffectView.addSubview(hostingView)
-            panel.contentView = visualEffectView
+            let hosting = NSHostingView(rootView: containerView)
+            hosting.frame = rect
+            hosting.autoresizingMask = [.width, .height]
+            panel.contentView = hosting
+            self.hostingView = hosting
             
             // Configure the keyboard interceptor
-            panel.onKeyDown = { [weak self, weak panel] event in
-                guard let self = self, let panel = panel else { return false }
+            panel.onKeyDown = { [weak self] event in
+                guard let self = self else { return false }
                 
                 switch event.keyCode {
                 case 125: // Arrow Down
@@ -103,7 +117,7 @@ public class PastryPanelController: NSObject, NSWindowDelegate {
                     return true
                 case 36: // Return / Enter
                     self.viewModel.selectAndPaste {
-                        panel.close()
+                        self.closePanel()
                     }
                     return true
                 default:
@@ -112,11 +126,13 @@ public class PastryPanelController: NSObject, NSWindowDelegate {
             }
             
             self.panel = panel
+        } else {
+            hostingView?.rootView = containerView
         }
         
         guard let panel = panel else { return }
         
-        positionPanel(panel)
+        positionPanel(panel, mouseLocation: mouseLocation, screenFrame: screenFrame, buttonSide: buttonSide)
         panel.makeKeyAndOrderFront(nil)
         
         // Activate our process to handle keystrokes
@@ -137,7 +153,12 @@ public class PastryPanelController: NSObject, NSWindowDelegate {
     
     public func windowDidResignKey(_ notification: Notification) {
         // Automatically close when focus is lost
-        closePanel()
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self, let panel = self.panel, panel.isVisible else { return }
+            if !panel.isKeyWindow {
+                self.closePanel()
+            }
+        }
     }
     
     /// Closes the panel and starts the scroll screenshot selection flow.
@@ -149,26 +170,40 @@ public class PastryPanelController: NSObject, NSWindowDelegate {
         }
     }
     
-    private func positionPanel(_ panel: PastryPanel) {
-        let mouseLocation = NSEvent.mouseLocation
-        
-        var activeScreen = NSScreen.main ?? NSScreen.screens.first!
+    private func findActiveScreen(at point: NSPoint) -> NSScreen {
         for screen in NSScreen.screens {
-            if NSMouseInRect(mouseLocation, screen.frame, false) {
-                activeScreen = screen
-                break
+            if NSMouseInRect(point, screen.frame, false) {
+                return screen
             }
         }
+        return NSScreen.main ?? NSScreen.screens.first!
+    }
+    
+    private func positionPanel(
+        _ panel: PastryPanel,
+        mouseLocation: NSPoint,
+        screenFrame: NSRect,
+        buttonSide: ScreenshotButtonSide
+    ) {
+        // We want the clipboard card (360x450) to center near the mouse cursor
+        let cardCenterOffsetX: CGFloat
+        if buttonSide == .right {
+            // Card is on the left side of container: [padding (18)] [Card (360)] [12] [Button (46)] [padding (18)]
+            cardCenterOffsetX = Self.padding + (Self.cardWidth / 2) // 18 + 180 = 198
+        } else {
+            // Card is on the right side of container: [padding (18)] [Button (46)] [12] [Card (360)] [padding (18)]
+            cardCenterOffsetX = Self.padding + Self.buttonAndSpacing + (Self.cardWidth / 2) // 18 + 58 + 180 = 256
+        }
         
-        let screenFrame = activeScreen.visibleFrame
-        let panelSize = panel.frame.size
+        let cardCenterOffsetY = Self.padding + (Self.cardHeight / 2) // 18 + 225 = 243
         
-        var x = mouseLocation.x - panelSize.width / 2
-        var y = mouseLocation.y - panelSize.height / 2
+        var originX = mouseLocation.x - cardCenterOffsetX
+        var originY = mouseLocation.y - cardCenterOffsetY
         
-        x = max(screenFrame.minX + 12, min(x, screenFrame.maxX - panelSize.width - 12))
-        y = max(screenFrame.minY + 12, min(y, screenFrame.maxY - panelSize.height - 12))
+        // Clamp entire window within visible screen bounds
+        originX = max(screenFrame.minX, min(originX, screenFrame.maxX - Self.windowWidth))
+        originY = max(screenFrame.minY, min(originY, screenFrame.maxY - Self.windowHeight))
         
-        panel.setFrameOrigin(NSPoint(x: x, y: y))
+        panel.setFrameOrigin(NSPoint(x: originX, y: originY))
     }
 }
