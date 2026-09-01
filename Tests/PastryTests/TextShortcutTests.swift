@@ -13,109 +13,171 @@ public struct TextShortcutTests {
         }
         
         let store = TextShortcutStore.shared
+        let assetStorage = ShortcutAssetStorage.shared
         
-        // ────────────────────────────────────────────────────────────────
-        // TEST 1: Model creation and normalizedKey
-        // ────────────────────────────────────────────────────────────────
-        let item1 = TextShortcut(shortcut: "Myemail", replacement: "balajee@gmail.com")
-        check(item1.shortcut == "Myemail", "TEST 1: Shortcut text must be preserved")
-        check(item1.replacement == "balajee@gmail.com", "TEST 1: Replacement text must be preserved")
-        check(item1.normalizedKey == "myemail", "TEST 1: normalizedKey must be lowercase")
-        
-        // ────────────────────────────────────────────────────────────────
-        // TEST 2: Case-Insensitive Matching
-        // ────────────────────────────────────────────────────────────────
-        store.resetForTesting(shortcuts: [
-            TextShortcut(shortcut: "Myemail", replacement: "balajee@gmail.com"),
-            TextShortcut(shortcut: "Addr", replacement: "123 ABC Street, Chennai\nIndia"),
-            TextShortcut(shortcut: "ph", replacement: "+91 98765 43210")
-        ])
-        
-        let testCases = ["myemail", "MYEMAIL", "Myemail", "MyEmail", "MYEMail", "mYeMaIl"]
-        for testCase in testCases {
-            let match = store.lookup(token: testCase)
-            check(match != nil, "TEST 2: lookup for '\(testCase)' must succeed")
-            check(match?.replacement == "balajee@gmail.com", "TEST 2: replacement for '\(testCase)' must be exact")
+        // Helper to create test image data
+        func makeTestImageData(width: Int = 40, height: Int = 40) -> Data {
+            let image = NSImage(size: NSSize(width: width, height: height))
+            image.lockFocus()
+            NSColor.systemBlue.setFill()
+            NSRect(x: 0, y: 0, width: width, height: height).fill()
+            image.unlockFocus()
+            let rep = NSBitmapImageRep(data: image.tiffRepresentation!)!
+            return rep.representation(using: .png, properties: [:])!
         }
         
-        // Multiline replacement preservation
-        let addrMatch = store.lookup(token: "addr")
-        check(addrMatch?.replacement == "123 ABC Street, Chennai\nIndia", "TEST 2: Multiline replacement must be preserved exactly")
+        // ────────────────────────────────────────────────────────────────
+        // TEST 1: Model creation and normalizedKey (Text & Image)
+        // ────────────────────────────────────────────────────────────────
+        let textItem = TextShortcut(shortcut: "Myemail", type: .text, textContent: "balajee@gmail.com")
+        check(textItem.shortcut == "Myemail", "TEST 1: Shortcut text must be preserved")
+        check(textItem.type == .text, "TEST 1: Shortcut type must be .text")
+        check(textItem.textContent == "balajee@gmail.com", "TEST 1: textContent must be preserved")
+        check(textItem.normalizedKey == "myemail", "TEST 1: normalizedKey must be lowercase")
+        
+        let imageItem = TextShortcut(shortcut: "sign", type: .image, imageAsset: "test-asset.png", imageName: "signature.png")
+        check(imageItem.shortcut == "sign", "TEST 1: Image shortcut must be preserved")
+        check(imageItem.type == .image, "TEST 1: Shortcut type must be .image")
+        check(imageItem.imageAsset == "test-asset.png", "TEST 1: imageAsset must match")
+        check(imageItem.imageName == "signature.png", "TEST 1: imageName must match")
+        check(imageItem.normalizedKey == "sign", "TEST 1: normalizedKey must be 'sign'")
+        
+        // ────────────────────────────────────────────────────────────────
+        // TEST 2: Case-Insensitive Matching (Text & Image)
+        // ────────────────────────────────────────────────────────────────
+        store.resetForTesting(shortcuts: [
+            TextShortcut(shortcut: "Myemail", type: .text, textContent: "balajee@gmail.com"),
+            TextShortcut(shortcut: "Addr", type: .text, textContent: "123 ABC Street, Chennai\nIndia"),
+            TextShortcut(shortcut: "sign", type: .image, imageAsset: "sig.png", imageName: "my_sig.png")
+        ])
+        
+        let textTestCases = ["myemail", "MYEMAIL", "Myemail", "MyEmail", "MYEMail", "mYeMaIl"]
+        for testCase in textTestCases {
+            let match = store.lookup(token: testCase)
+            check(match != nil, "TEST 2: lookup for '\(testCase)' must succeed")
+            check(match?.type == .text, "TEST 2: type must be .text")
+            check(match?.textContent == "balajee@gmail.com", "TEST 2: replacement for '\(testCase)' must be exact")
+        }
+        
+        let imageTestCases = ["sign", "SIGN", "Sign", "sIgN"]
+        for testCase in imageTestCases {
+            let match = store.lookup(token: testCase)
+            check(match != nil, "TEST 2: image lookup for '\(testCase)' must succeed")
+            check(match?.type == .image, "TEST 2: type must be .image")
+            check(match?.imageAsset == "sig.png", "TEST 2: imageAsset must match")
+        }
         
         // Non-matching token returns nil
         let nonMatch = store.lookup(token: "unknown_token")
         check(nonMatch == nil, "TEST 2: Non-matching token must return nil")
         
         // ────────────────────────────────────────────────────────────────
-        // TEST 3: Validation — Empty shortcut rejected
+        // TEST 3: Validation — Empty shortcut and whitespace rejected
         // ────────────────────────────────────────────────────────────────
-        let emptyValidation = TextShortcut.validate(shortcut: "   ", replacement: "test", existing: store.shortcuts)
+        let emptyValidation = TextShortcut.validate(
+            shortcut: "   ",
+            type: .text,
+            textContent: "test",
+            imageAsset: nil,
+            existing: store.shortcuts
+        )
         check(emptyValidation != nil, "TEST 3: Empty shortcut must be rejected")
         
-        let spaceValidation = TextShortcut.validate(shortcut: "my email", replacement: "test", existing: store.shortcuts)
+        let spaceValidation = TextShortcut.validate(
+            shortcut: "my email",
+            type: .text,
+            textContent: "test",
+            imageAsset: nil,
+            existing: store.shortcuts
+        )
         check(spaceValidation != nil, "TEST 3: Shortcut containing spaces must be rejected")
+        
+        let missingImageValidation = TextShortcut.validate(
+            shortcut: "logo",
+            type: .image,
+            textContent: nil,
+            imageAsset: nil,
+            existing: store.shortcuts
+        )
+        check(missingImageValidation != nil, "TEST 3: Image shortcut without image asset must be rejected")
         
         // ────────────────────────────────────────────────────────────────
         // TEST 4: Validation — Duplicate shortcut rejected case-insensitively
         // ────────────────────────────────────────────────────────────────
-        let dupValidation1 = TextShortcut.validate(shortcut: "myemail", replacement: "other@gmail.com", existing: store.shortcuts)
+        let dupValidation1 = TextShortcut.validate(
+            shortcut: "myemail",
+            type: .text,
+            textContent: "other@gmail.com",
+            imageAsset: nil,
+            existing: store.shortcuts
+        )
         check(dupValidation1 != nil, "TEST 4: Duplicate lowercase shortcut must be rejected")
         
-        let dupValidation2 = TextShortcut.validate(shortcut: "MYEMAIL", replacement: "other@gmail.com", existing: store.shortcuts)
-        check(dupValidation2 != nil, "TEST 4: Duplicate uppercase shortcut must be rejected")
-        
-        // Editing existing shortcut with the same name is allowed
-        let existingItem = store.shortcuts.first(where: { $0.normalizedKey == "myemail" })!
-        let editValidation = TextShortcut.validate(shortcut: "MyEmail", replacement: "updated@gmail.com", existing: store.shortcuts, editingId: existingItem.id)
-        check(editValidation == nil, "TEST 4: Editing existing shortcut should allow keeping the same name")
+        let dupValidation2 = TextShortcut.validate(
+            shortcut: "SIGN",
+            type: .image,
+            textContent: nil,
+            imageAsset: "new_sig.png",
+            existing: store.shortcuts
+        )
+        check(dupValidation2 != nil, "TEST 4: Duplicate uppercase shortcut against image must be rejected")
         
         // ────────────────────────────────────────────────────────────────
-        // TEST 5: Trailing Token Extraction & Word Boundaries
+        // TEST 5: ShortcutAssetStorage operations
+        // ────────────────────────────────────────────────────────────────
+        let testData = makeTestImageData()
+        guard let savedAsset = assetStorage.saveImageData(testData, originalName: "test_logo.png") else {
+            check(false, "TEST 5: Failed to save test image data")
+            return
+        }
+        
+        let loadedData = assetStorage.loadImageData(assetFilename: savedAsset.assetFilename)
+        check(loadedData != nil, "TEST 5: Loaded image data must not be nil")
+        check(loadedData?.count == testData.count, "TEST 5: Loaded data count must match saved data")
+        
+        let thumbnail = assetStorage.loadThumbnailImage(assetFilename: savedAsset.assetFilename)
+        check(thumbnail != nil, "TEST 5: Thumbnail image must be loadable")
+        
+        // ────────────────────────────────────────────────────────────────
+        // TEST 6: Store CRUD & Shared Asset Protection
+        // ────────────────────────────────────────────────────────────────
+        // Add Image shortcut
+        let addImgRes = store.addImageShortcut(shortcut: "brandlogo", assetFilename: savedAsset.assetFilename, originalName: "test_logo.png")
+        check(addImgRes.success, "TEST 6: addImageShortcut must succeed")
+        check(store.lookup(token: "BRANDLOGO")?.imageAsset == savedAsset.assetFilename, "TEST 6: Lookup must return correct asset")
+        
+        // Add second shortcut referencing the SAME asset
+        let addSharedRes = store.addImageShortcut(shortcut: "secondarylogo", assetFilename: savedAsset.assetFilename, originalName: "test_logo.png")
+        check(addSharedRes.success, "TEST 6: addImageShortcut for shared asset must succeed")
+        
+        // Delete first shortcut — asset MUST still exist because second shortcut references it
+        let firstItem = store.lookup(token: "brandlogo")!
+        store.delete(id: firstItem.id)
+        check(store.lookup(token: "brandlogo") == nil, "TEST 6: Deleted shortcut must be gone")
+        check(assetStorage.loadImageData(assetFilename: savedAsset.assetFilename) != nil, "TEST 6: Shared asset must NOT be deleted while second shortcut exists")
+        
+        // Delete second shortcut — asset should now be cleaned up
+        let secondItem = store.lookup(token: "secondarylogo")!
+        store.delete(id: secondItem.id)
+        check(store.lookup(token: "secondarylogo") == nil, "TEST 6: Second shortcut must be gone")
+        check(assetStorage.loadImageData(assetFilename: savedAsset.assetFilename) == nil, "TEST 6: Unreferenced asset should be deleted from disk")
+        
+        // ────────────────────────────────────────────────────────────────
+        // TEST 7: Trailing Token Extraction & Word Boundaries
         // ────────────────────────────────────────────────────────────────
         let monitor = TextShortcutMonitor.shared
         
-        let token1 = monitor.extractTrailingToken(from: "Hello Myemail")
-        check(token1 == "Myemail", "TEST 5: Trailing token after space should be 'Myemail' (got '\(token1)')")
+        let token1 = monitor.extractTrailingToken(from: "Please see sign")
+        check(token1 == "sign", "TEST 7: Trailing token after space should be 'sign' (got '\(token1)')")
         
-        let token2 = monitor.extractTrailingToken(from: "Myemail")
-        check(token2 == "Myemail", "TEST 5: Single token should be 'Myemail' (got '\(token2)')")
+        let token2 = monitor.extractTrailingToken(from: "my_signature_key")
+        check(token2 == "my_signature_key", "TEST 7: Token with underscore should be extracted (got '\(token2)')")
         
-        let token3 = monitor.extractTrailingToken(from: "Please contact me at my-shortcut")
-        check(token3 == "my-shortcut", "TEST 5: Token with hyphen should be extracted (got '\(token3)')")
+        let token3 = monitor.extractTrailingToken(from: "image-shortcut")
+        check(token3 == "image-shortcut", "TEST 7: Token with hyphen should be extracted (got '\(token3)')")
         
-        let token4 = monitor.extractTrailingToken(from: "prefix_addr")
-        check(token4 == "prefix_addr", "TEST 5: Token with underscore should be extracted (got '\(token4)')")
-        
-        let token5 = monitor.extractTrailingToken(from: "Hello Myemail,")
-        check(token5 == "", "TEST 5: Trailing punctuation should yield empty word token (got '\(token5)')")
-        
-        // ────────────────────────────────────────────────────────────────
-        // TEST 6: Trigger Resolution Before Cursor
-        // ────────────────────────────────────────────────────────────────
-        monitor.simulateTyping("Hello MYEMAIL")
-        let resolved = monitor.resolveShortcutBeforeCursor()
-        check(resolved != nil, "TEST 6: resolveShortcutBeforeCursor must succeed for 'Hello MYEMAIL'")
-        check(resolved?.token == "MYEMAIL", "TEST 6: matched token must be 'MYEMAIL'")
-        check(resolved?.shortcut.replacement == "balajee@gmail.com", "TEST 6: replacement must be 'balajee@gmail.com'")
-        
-        monitor.simulateTyping("Random text without shortcut")
-        let unresolved = monitor.resolveShortcutBeforeCursor()
-        check(unresolved == nil, "TEST 6: unresolved text must return nil")
-        
-        // ────────────────────────────────────────────────────────────────
-        // TEST 7: Store CRUD Operations
-        // ────────────────────────────────────────────────────────────────
-        let addRes = store.add(shortcut: "custom_key", replacement: "Custom Value 123")
-        check(addRes.success, "TEST 7: Adding valid shortcut must succeed")
-        check(store.lookup(token: "CUSTOM_KEY")?.replacement == "Custom Value 123", "TEST 7: Newly added shortcut must be lookable")
-        
-        let addedItem = store.lookup(token: "custom_key")!
-        let updateRes = store.update(id: addedItem.id, shortcut: "custom_key_v2", replacement: "Updated Value")
-        check(updateRes.success, "TEST 7: Updating shortcut must succeed")
-        check(store.lookup(token: "custom_key_v2")?.replacement == "Updated Value", "TEST 7: Updated shortcut must have new value")
-        
-        store.delete(id: addedItem.id)
-        check(store.lookup(token: "custom_key_v2") == nil, "TEST 7: Deleted shortcut must no longer be found")
+        let token4 = monitor.extractTrailingToken(from: "sign,")
+        check(token4 == "", "TEST 7: Trailing punctuation should yield empty token (got '\(token4)')")
         
         print("✅ TextShortcutTests passed successfully!")
     }

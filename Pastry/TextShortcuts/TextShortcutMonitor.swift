@@ -104,7 +104,7 @@ public class TextShortcutMonitor {
                 typedBuffer = ""
                 
                 TextShortcutInjector.shared.inject(
-                    replacement: match.shortcut.replacement,
+                    shortcut: match.shortcut,
                     charactersToDelete: tokenLength
                 )
                 return nil // Suppress raw event

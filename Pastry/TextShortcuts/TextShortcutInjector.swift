@@ -2,31 +2,47 @@ import Foundation
 import CoreGraphics
 import AppKit
 
-/// Handles direct keyboard deletion and Unicode text injection into the active focused application.
-/// 100% independent of NSPasteboard, clipboard history, or Cmd+V.
+/// Handles shortcut expansion into the active focused application.
+/// - Text shortcuts: 100% direct Unicode keyboard injection (zero clipboard / pasteboard usage).
+/// - Image shortcuts: Temporary pasteboard snapshot → isolated paste → full clipboard restoration.
 public class TextShortcutInjector {
     public static let shared = TextShortcutInjector()
     
     private let source = CGEventSource(stateID: .hidSystemState)
     
+    /// Settlement delay (in seconds) allowing the target application to consume
+    /// the temporary pasteboard image before restoring the user's original clipboard.
+    public var imagePasteSettlementDelay: TimeInterval = 0.35
+    
     private init() {}
     
-    /// Deletes `charactersToDelete` characters by simulating backspace keys,
-    /// then directly types the `replacement` string as Unicode characters.
-    ///
-    /// - Parameters:
-    ///   - replacement: The exact text to inject (preserves newlines, case, and special characters).
-    ///   - charactersToDelete: The length of the typed shortcut to erase before typing replacement.
-    public func inject(replacement: String, charactersToDelete: Int) {
-        guard !replacement.isEmpty || charactersToDelete > 0 else { return }
-        
+    /// Expands the matched shortcut into the active focused application.
+    public func inject(shortcut: TextShortcut, charactersToDelete: Int) {
+        switch shortcut.type {
+        case .text:
+            guard let text = shortcut.textContent, !text.isEmpty || charactersToDelete > 0 else { return }
+            injectText(replacement: text, charactersToDelete: charactersToDelete)
+            
+        case .image:
+            guard let assetFilename = shortcut.imageAsset,
+                  let imageData = ShortcutAssetStorage.shared.loadImageData(assetFilename: assetFilename) else {
+                return
+            }
+            injectImage(imageData: imageData, charactersToDelete: charactersToDelete)
+        }
+    }
+    
+    // MARK: - Direct Text Injection (Zero Clipboard Interaction)
+    
+    /// Directly deletes typed characters via backspaces and types the replacement text as Unicode characters.
+    /// Never touches NSPasteboard or simulates Cmd+V.
+    public func injectText(replacement: String, charactersToDelete: Int) {
         DispatchQueue.global(qos: .userInteractive).async { [weak self] in
             guard let self = self else { return }
             
-            // 1. Send backspace events to delete the typed shortcut
+            // 1. Send backspaces to delete typed shortcut
             if charactersToDelete > 0 {
                 self.sendBackspaces(count: charactersToDelete)
-                // Small micro-delay to let target text field process backspaces
                 Thread.sleep(forTimeInterval: 0.015)
             }
             
@@ -37,7 +53,50 @@ public class TextShortcutInjector {
         }
     }
     
-    // MARK: - Backspace Simulation
+    // MARK: - Image Injection (Isolated Pasteboard with Full Restoration)
+    
+    /// Expands an image shortcut by snapshotting current pasteboard, temporarily pasting the image,
+    /// and restoring the user's exact prior clipboard state after the target app has consumed the paste.
+    public func injectImage(imageData: Data, charactersToDelete: Int) {
+        guard let image = NSImage(data: imageData) else { return }
+        
+        DispatchQueue.main.async {
+            // 1. Capture user's complete existing pasteboard snapshot
+            let snapshot = PasteboardSnapshot.captureCurrent()
+            
+            // 2. Send backspaces to delete the typed shortcut
+            if charactersToDelete > 0 {
+                self.sendBackspaces(count: charactersToDelete)
+                Thread.sleep(forTimeInterval: 0.02)
+            }
+            
+            // 3. Temporarily write image to pasteboard with ClipboardManager monitoring suppressed
+            ClipboardManager.shared.writeWithoutMonitoring {
+                let pasteboard = NSPasteboard.general
+                pasteboard.clearContents()
+                
+                let item = NSPasteboardItem()
+                item.setData(imageData, forType: .png)
+                if let tiffData = image.tiffRepresentation {
+                    item.setData(tiffData, forType: .tiff)
+                }
+                pasteboard.writeObjects([item, image])
+            }
+            
+            // 4. Simulate Command+V paste
+            self.triggerSystemPaste()
+            
+            // 5. Restore user's original pasteboard state after target app has consumed the image
+            let delay = self.imagePasteSettlementDelay
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                ClipboardManager.shared.writeWithoutMonitoring {
+                    snapshot.restore()
+                }
+            }
+        }
+    }
+    
+    // MARK: - Keyboard Simulation Helpers
     
     private func sendBackspaces(count: Int) {
         let backspaceKeyCode: CGKeyCode = 51 // Backspace / Delete keycode on macOS
@@ -53,18 +112,14 @@ public class TextShortcutInjector {
                 keyUp.post(tap: .cghidEventTap)
             }
             
-            // Micro pause between keystrokes for reliable consumption across fast editors
             Thread.sleep(forTimeInterval: 0.002)
         }
     }
-    
-    // MARK: - Direct Unicode Keystroke Typing
     
     private func sendUnicodeString(_ string: String) {
         let utf16 = Array(string.utf16)
         guard !utf16.isEmpty else { return }
         
-        // Chunk long text into small blocks to guarantee reliable dispatch across all apps
         let chunkSize = 20
         var index = 0
         
@@ -86,6 +141,77 @@ public class TextShortcutInjector {
             
             index += chunkSize
             Thread.sleep(forTimeInterval: 0.003)
+        }
+    }
+    
+    private func triggerSystemPaste() {
+        let vKeyCode: CGKeyCode = 9 // V key on macOS
+        
+        if let vDown = CGEvent(keyboardEventSource: source, virtualKey: vKeyCode, keyDown: true) {
+            vDown.flags = .maskCommand
+            vDown.post(tap: .cghidEventTap)
+        }
+        
+        if let vUp = CGEvent(keyboardEventSource: source, virtualKey: vKeyCode, keyDown: false) {
+            vUp.flags = .maskCommand
+            vUp.post(tap: .cghidEventTap)
+        }
+    }
+}
+
+// MARK: - Pasteboard Snapshot Helper
+
+/// Full multi-item snapshot of NSPasteboard.general for exact restoration.
+private struct PasteboardSnapshot {
+    struct ItemRepresentation {
+        let type: NSPasteboard.PasteboardType
+        let data: Data
+    }
+    
+    let items: [[ItemRepresentation]]
+    let stringFallback: String?
+    
+    static func captureCurrent() -> PasteboardSnapshot {
+        let pb = NSPasteboard.general
+        var capturedItems: [[ItemRepresentation]] = []
+        
+        if let pasteboardItems = pb.pasteboardItems {
+            for pbItem in pasteboardItems {
+                var reps: [ItemRepresentation] = []
+                for type in pbItem.types {
+                    if let data = pbItem.data(forType: type) {
+                        reps.append(ItemRepresentation(type: type, data: data))
+                    }
+                }
+                if !reps.isEmpty {
+                    capturedItems.append(reps)
+                }
+            }
+        }
+        
+        return PasteboardSnapshot(
+            items: capturedItems,
+            stringFallback: pb.string(forType: .string)
+        )
+    }
+    
+    func restore() {
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        
+        guard !items.isEmpty else {
+            if let str = stringFallback {
+                pb.setString(str, forType: .string)
+            }
+            return
+        }
+        
+        for itemReps in items {
+            let newItem = NSPasteboardItem()
+            for rep in itemReps {
+                newItem.setData(rep.data, forType: rep.type)
+            }
+            pb.writeObjects([newItem])
         }
     }
 }

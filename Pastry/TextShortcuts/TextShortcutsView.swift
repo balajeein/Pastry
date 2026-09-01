@@ -1,6 +1,8 @@
 import SwiftUI
+import AppKit
+import UniformTypeIdentifiers
 
-/// Floating management view for Text Shortcuts (listing, adding, editing, and deleting).
+/// Floating management view for Text & Image Shortcuts.
 public struct TextShortcutsView: View {
     @ObservedObject var store = TextShortcutStore.shared
     @State private var selectedShortcutId: UUID?
@@ -19,7 +21,8 @@ public struct TextShortcutsView: View {
         }
         return store.shortcuts.filter {
             $0.shortcut.localizedCaseInsensitiveContains(searchText) ||
-            $0.replacement.localizedCaseInsensitiveContains(searchText)
+            ($0.textContent?.localizedCaseInsensitiveContains(searchText) == true) ||
+            ($0.imageName?.localizedCaseInsensitiveContains(searchText) == true)
         }
     }
     
@@ -152,7 +155,7 @@ public struct TextShortcutsView: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
         }
-        .frame(width: 400, height: 380)
+        .frame(width: 420, height: 390)
         .background(
             AppleGlassEffectView(cornerRadius: 16)
         )
@@ -164,20 +167,43 @@ public struct TextShortcutsView: View {
         .sheet(isPresented: $isShowingEditor) {
             ShortcutEditorSheet(
                 existingShortcut: editingShortcut,
-                onSave: { shortcut, replacement in
+                onSave: { shortcut, type, textContent, assetFilename, imageName in
                     if let editing = editingShortcut {
-                        let res = store.update(id: editing.id, shortcut: shortcut, replacement: replacement)
-                        if res.success {
-                            isShowingEditor = false
-                            selectedShortcutId = editing.id
+                        if type == .text {
+                            let res = store.updateTextShortcut(id: editing.id, shortcut: shortcut, replacement: textContent ?? "")
+                            if res.success {
+                                isShowingEditor = false
+                                selectedShortcutId = editing.id
+                            }
+                            return res.error
+                        } else {
+                            guard let asset = assetFilename, let name = imageName else {
+                                return "Please choose an image."
+                            }
+                            let res = store.updateImageShortcut(id: editing.id, shortcut: shortcut, assetFilename: asset, originalName: name)
+                            if res.success {
+                                isShowingEditor = false
+                                selectedShortcutId = editing.id
+                            }
+                            return res.error
                         }
-                        return res.error
                     } else {
-                        let res = store.add(shortcut: shortcut, replacement: replacement)
-                        if res.success {
-                            isShowingEditor = false
+                        if type == .text {
+                            let res = store.addTextShortcut(shortcut: shortcut, replacement: textContent ?? "")
+                            if res.success {
+                                isShowingEditor = false
+                            }
+                            return res.error
+                        } else {
+                            guard let asset = assetFilename, let name = imageName else {
+                                return "Please choose an image."
+                            }
+                            let res = store.addImageShortcut(shortcut: shortcut, assetFilename: asset, originalName: name)
+                            if res.success {
+                                isShowingEditor = false
+                            }
+                            return res.error
                         }
-                        return res.error
                     }
                 },
                 onCancel: {
@@ -204,7 +230,7 @@ private struct ShortcutRowView: View {
     
     var body: some View {
         HStack(spacing: 12) {
-            // LEFT SIDE: Shortcut
+            // LEFT SIDE: Shortcut Pill
             Text(shortcut.shortcut)
                 .font(.system(size: 12, weight: .semibold, design: .monospaced))
                 .foregroundColor(isSelected ? .white : .primary)
@@ -216,13 +242,37 @@ private struct ShortcutRowView: View {
                 )
                 .frame(minWidth: 90, alignment: .leading)
             
-            // RIGHT SIDE: Replacement content (truncated with ellipsis if long)
-            Text(shortcut.replacement.replacingOccurrences(of: "\n", with: " ↵ "))
-                .font(.system(size: 12))
-                .foregroundColor(isSelected ? .white.opacity(0.92) : .secondary)
-                .lineLimit(1)
-                .truncationMode(.tail)
+            // RIGHT SIDE: Content (Text or Image Thumbnail)
+            if shortcut.type == .text {
+                Text((shortcut.textContent ?? "").replacingOccurrences(of: "\n", with: " ↵ "))
+                    .font(.system(size: 12))
+                    .foregroundColor(isSelected ? .white.opacity(0.92) : .secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                HStack(spacing: 6) {
+                    if let asset = shortcut.imageAsset,
+                       let thumb = ShortcutAssetStorage.shared.loadThumbnailImage(assetFilename: asset) {
+                        Image(nsImage: thumb)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 20, height: 20)
+                            .cornerRadius(4)
+                    } else {
+                        Image(systemName: "photo")
+                            .font(.system(size: 12))
+                            .foregroundColor(isSelected ? .white : .secondary)
+                    }
+                    
+                    Text(shortcut.imageName ?? "Image Asset")
+                        .font(.system(size: 12))
+                        .foregroundColor(isSelected ? .white.opacity(0.92) : .secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
                 .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
@@ -240,32 +290,116 @@ private struct ShortcutRowView: View {
     }
 }
 
+// MARK: - Native Multiline NSTextView Wrapper
+
+/// Native AppKit NSTextView wrapped in an NSScrollView for 100% native macOS text editing,
+/// paste (⌘V), copy (⌘C), select all (⌘A), scrolling, and newlines preservation.
+public struct NativeMultilineTextEditor: NSViewRepresentable {
+    @Binding var text: String
+    var placeholder: String = "e.g. balajee@gmail.com"
+    
+    public init(text: Binding<String>, placeholder: String = "e.g. balajee@gmail.com") {
+        self._text = text
+        self.placeholder = placeholder
+    }
+    
+    public func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    public func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = NSScrollView()
+        scrollView.drawsBackground = false
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = false
+        scrollView.autohidesScrollers = true
+        
+        let textView = NSTextView()
+        textView.delegate = context.coordinator
+        textView.isRichText = false
+        textView.allowsUndo = true
+        textView.isSelectable = true
+        textView.isEditable = true
+        textView.font = NSFont.systemFont(ofSize: 12)
+        textView.textColor = NSColor.labelColor
+        textView.backgroundColor = NSColor.clear
+        textView.drawsBackground = false
+        textView.isAutomaticQuoteSubstitutionEnabled = false
+        textView.isAutomaticDashSubstitutionEnabled = false
+        textView.isAutomaticTextReplacementEnabled = false
+        textView.isAutomaticSpellingCorrectionEnabled = false
+        textView.string = text
+        
+        // Sizing & container setup
+        textView.autoresizingMask = [.width]
+        textView.textContainer?.containerSize = NSSize(width: scrollView.contentSize.width, height: CGFloat.greatestFiniteMagnitude)
+        textView.textContainer?.widthTracksTextView = true
+        
+        scrollView.documentView = textView
+        context.coordinator.textView = textView
+        return scrollView
+    }
+    
+    public func updateNSView(_ nsView: NSScrollView, context: Context) {
+        guard let textView = nsView.documentView as? NSTextView else { return }
+        if textView.string != text {
+            textView.string = text
+        }
+    }
+    
+    public class Coordinator: NSObject, NSTextViewDelegate {
+        var parent: NativeMultilineTextEditor
+        weak var textView: NSTextView?
+        
+        init(_ parent: NativeMultilineTextEditor) {
+            self.parent = parent
+        }
+        
+        public func textDidChange(_ notification: Notification) {
+            guard let textView = notification.object as? NSTextView else { return }
+            parent.text = textView.string
+        }
+    }
+}
+
 // MARK: - Shortcut Editor Sheet (Add / Edit)
 
 private struct ShortcutEditorSheet: View {
     let existingShortcut: TextShortcut?
-    let onSave: (String, String) -> String?
+    let onSave: (String, ShortcutType, String?, String?, String?) -> String?
     let onCancel: () -> Void
     
     @State private var shortcutText: String = ""
+    @State private var shortcutType: ShortcutType = .text
     @State private var replacementText: String = ""
+    @State private var assetFilename: String? = nil
+    @State private var originalImageName: String? = nil
+    @State private var previewImage: NSImage? = nil
     @State private var errorMessage: String? = nil
     
     init(
         existingShortcut: TextShortcut?,
-        onSave: @escaping (String, String) -> String?,
+        onSave: @escaping (String, ShortcutType, String?, String?, String?) -> String?,
         onCancel: @escaping () -> Void
     ) {
         self.existingShortcut = existingShortcut
         self.onSave = onSave
         self.onCancel = onCancel
         _shortcutText = State(initialValue: existingShortcut?.shortcut ?? "")
-        _replacementText = State(initialValue: existingShortcut?.replacement ?? "")
+        _shortcutType = State(initialValue: existingShortcut?.type ?? .text)
+        _replacementText = State(initialValue: existingShortcut?.textContent ?? "")
+        _assetFilename = State(initialValue: existingShortcut?.imageAsset)
+        _originalImageName = State(initialValue: existingShortcut?.imageName)
+        
+        if let asset = existingShortcut?.imageAsset,
+           let thumb = ShortcutAssetStorage.shared.loadThumbnailImage(assetFilename: asset) {
+            _previewImage = State(initialValue: thumb)
+        }
     }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(existingShortcut == nil ? "Add Text Shortcut" : "Edit Text Shortcut")
+            Text(existingShortcut == nil ? "Add Shortcut" : "Edit Shortcut")
                 .font(.system(size: 14, weight: .bold))
                 .foregroundColor(.primary)
             
@@ -275,30 +409,84 @@ private struct ShortcutEditorSheet: View {
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.secondary)
                 
-                TextField("e.g. Myemail", text: $shortcutText)
+                TextField("e.g. Myemail or sign", text: $shortcutText)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .font(.system(size: 13, design: .monospaced))
             }
             
-            // Replacement Input
+            // Type Selector (Text / Image)
             VStack(alignment: .leading, spacing: 4) {
-                Text("Replace with")
+                Text("Type")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.secondary)
                 
-                if #available(macOS 13.0, *) {
-                    TextField("e.g. balajee@gmail.com", text: $replacementText, axis: .vertical)
-                        .lineLimit(3...6)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                        .font(.system(size: 12))
-                } else {
-                    TextEditor(text: $replacementText)
-                        .frame(height: 70)
-                        .font(.system(size: 12))
+                Picker("", selection: $shortcutType) {
+                    Text("Text").tag(ShortcutType.text)
+                    Text("Image").tag(ShortcutType.image)
+                }
+                .pickerStyle(SegmentedPickerStyle())
+            }
+            
+            // Content Input depending on Type
+            if shortcutType == .text {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Replace with")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.secondary)
+                    
+                    NativeMultilineTextEditor(text: $replacementText, placeholder: "e.g. balajee@gmail.com")
+                        .frame(height: 120)
+                        .padding(6)
+                        .background(Color(NSColor.controlBackgroundColor).opacity(0.6))
+                        .cornerRadius(6)
                         .overlay(
                             RoundedRectangle(cornerRadius: 6)
-                                .stroke(Color.primary.opacity(0.15), lineWidth: 1)
+                                .stroke(Color.primary.opacity(0.18), lineWidth: 1)
                         )
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Image Content")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.secondary)
+                    
+                    if let preview = previewImage {
+                        HStack(spacing: 12) {
+                            Image(nsImage: preview)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 54, height: 54)
+                                .background(Color.black.opacity(0.2))
+                                .cornerRadius(8)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                                )
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(originalImageName ?? "Selected Image")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .lineLimit(1)
+                                
+                                Button("Change Image…") {
+                                    chooseImage()
+                                }
+                                .font(.system(size: 11))
+                            }
+                        }
+                        .padding(8)
+                        .background(Color.primary.opacity(0.04))
+                        .cornerRadius(8)
+                    } else {
+                        Button(action: chooseImage) {
+                            HStack {
+                                Image(systemName: "photo.badge.plus")
+                                Text("Choose Image…")
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                        }
+                    }
                 }
             }
             
@@ -316,15 +504,43 @@ private struct ShortcutEditorSheet: View {
                     .keyboardShortcut(.cancelAction)
                 
                 Button("Save") {
-                    let err = onSave(shortcutText, replacementText)
+                    let err = onSave(shortcutText, shortcutType, replacementText, assetFilename, originalImageName)
                     errorMessage = err
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(shortcutText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(
+                    shortcutText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                    (shortcutType == .image && assetFilename == nil)
+                )
             }
             .padding(.top, 6)
         }
         .padding(18)
-        .frame(width: 340)
+        .frame(width: 380)
+    }
+    
+    private func chooseImage() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.message = "Select an image for this shortcut"
+        
+        if #available(macOS 12.0, *) {
+            panel.allowedContentTypes = [.image, .png, .jpeg, .heic, .gif, .tiff, .webP]
+        } else {
+            panel.allowedFileTypes = ["png", "jpg", "jpeg", "heic", "gif", "tiff", "webp"]
+        }
+        
+        if panel.runModal() == .OK, let url = panel.url {
+            if let result = ShortcutAssetStorage.shared.importImage(from: url) {
+                assetFilename = result.assetFilename
+                originalImageName = result.originalName
+                previewImage = ShortcutAssetStorage.shared.loadThumbnailImage(assetFilename: result.assetFilename)
+                errorMessage = nil
+            } else {
+                errorMessage = "Failed to import selected image. Please ensure it is a valid image file."
+            }
+        }
     }
 }
