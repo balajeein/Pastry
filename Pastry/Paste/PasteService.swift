@@ -58,6 +58,16 @@ public class PasteService {
         }
     }
     
+    /// Checks if Screen Recording permission is granted by attempting a small CGWindowListCreateImage capture.
+    public func isScreenRecordingPermissionGranted() -> Bool {
+        return ScrollScreenshotController.isScreenRecordingGranted()
+    }
+    
+    /// Opens System Preferences to the Screen Recording section.
+    public func openScreenRecordingSettings() {
+        ScrollScreenshotController.openScreenRecordingSettings()
+    }
+    
     private func writeItemToPasteboard(_ item: ClipboardItem) {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()

@@ -140,6 +140,15 @@ public class PastryPanelController: NSObject, NSWindowDelegate {
         closePanel()
     }
     
+    /// Closes the panel and starts the scroll screenshot selection flow.
+    public func startScrollScreenshot() {
+        let screen = panel?.screen
+        closePanel()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            ScrollScreenshotController.shared.startCapture(on: screen)
+        }
+    }
+    
     private func positionPanel(_ panel: PastryPanel) {
         let mouseLocation = NSEvent.mouseLocation
         

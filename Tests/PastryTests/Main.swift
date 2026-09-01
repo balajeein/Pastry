@@ -6,5 +6,6 @@ struct TestRunner {
         CalculatorTests.runAll()
         ClipboardTests.runAll()
         ScreenshotTests.runAll()
+        ScrollScreenshotTests.runAll()
     }
 }

@@ -101,6 +101,20 @@ public struct ClipboardPanelView: View {
                     }
                     .buttonStyle(.plain)
                 }
+                
+                // Scroll Screenshot button
+                Button(action: {
+                    onClose()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                        ScrollScreenshotController.shared.startCapture()
+                    }
+                }) {
+                    Image(systemName: "camera.viewfinder")
+                        .foregroundColor(.secondary.opacity(0.9))
+                        .font(.system(size: 14))
+                }
+                .buttonStyle(.plain)
+                .help("Scroll Screenshot")
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
