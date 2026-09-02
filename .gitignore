@@ -4,3 +4,9 @@ DerivedData/
 *.xcuserstate
 xcuserdata/
 *.swp
+*.key
+*.pem
+*.priv
+*.secret
+dsa_priv.pem
+eddsa_priv*

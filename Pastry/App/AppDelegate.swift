@@ -28,7 +28,10 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         TextShortcutStore.shared.load()
         TextShortcutMonitor.shared.startMonitoring()
         
-        // 5. Handle first launch behavior
+        // 5. Initialize Sparkle Automatic Updater
+        UpdaterController.shared.start()
+        
+        // 6. Handle first launch behavior
         checkFirstLaunch()
     }
     
@@ -50,6 +53,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         let appMenuItem = NSMenuItem()
         let appMenu = NSMenu()
         appMenu.addItem(withTitle: "About Pastry", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        appMenu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdatesPressed), keyEquivalent: "")
         appMenu.addItem(NSMenuItem.separator())
         appMenu.addItem(withTitle: "Quit Pastry", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         appMenuItem.submenu = appMenu
@@ -69,6 +73,10 @@ public class AppDelegate: NSObject, NSApplicationDelegate {
         mainMenu.addItem(editMenuItem)
         
         NSApp.mainMenu = mainMenu
+    }
+    
+    @objc private func checkForUpdatesPressed() {
+        UpdaterController.shared.checkForUpdates()
     }
     
     private func checkFirstLaunch() {

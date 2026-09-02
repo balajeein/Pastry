@@ -51,6 +51,10 @@ public class MenuBarController: NSObject, NSMenuDelegate {
         settingsItem.target = self
         menu.addItem(settingsItem)
         
+        let updateItem = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdatesPressed), keyEquivalent: "")
+        updateItem.target = self
+        menu.addItem(updateItem)
+        
         menu.addItem(NSMenuItem.separator())
         
         let quitItem = NSMenuItem(title: "Quit Pastry", action: #selector(quitPressed), keyEquivalent: "q")
@@ -110,6 +114,10 @@ public class MenuBarController: NSObject, NSMenuDelegate {
         
         settingsWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+    
+    @objc private func checkForUpdatesPressed() {
+        UpdaterController.shared.checkForUpdates()
     }
     
     @objc private func quitPressed() {
