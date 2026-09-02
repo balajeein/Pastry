@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <channel>
+        <title>Pastry Changelog</title>
+        <link>https://raw.githubusercontent.com/balajeein/Pastry/main/appcast.xml</link>
+        <description>Most recent updates for Pastry.</description>
+        <language>en</language>
+        <item>
+            <title>Pastry 2.0.0</title>
+            <pubDate>Wed, 02 Sep 2026 05:00:00 +0000</pubDate>
+            <link>https://github.com/balajeein/Pastry/releases/tag/v2.0.0</link>
+            <sparkle:version>1</sparkle:version>
+            <sparkle:shortVersionString>2.0.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>11.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[
+                <h2>What's New in Pastry 2.0.0</h2>
+                <ul>
+                    <li><strong>Text & Image Shortcuts</strong>: Instant snippet and image expansion at your cursor with ⌥ + Space.</li>
+                    <li><strong>Native macOS UI Redesign</strong>: Authentic macOS design language and streamlined interaction.</li>
+                    <li><strong>Sparkle 2 Auto-Updates</strong>: Seamless background updates directly from GitHub.</li>
+                    <li><strong>Performance Improvements</strong>: Universal binary built natively for Apple Silicon and Intel.</li>
+                </ul>
+            ]]></description>
+            <enclosure
+                url="https://github.com/balajeein/Pastry/releases/download/v2.0.0/Pastry-2.0.0.zip"
+                length="2564722"
+                type="application/octet-stream"
+                sparkle:edSignature="yGefYgfnirBmY4QCM77t0a4NaWIAV/cpUPru71s0Ms2V0+3MUzKDTjrija1wixLu6y38oqRr+h6VrpXpTeofCA==" />
+        </item>
+    </channel>
+</rss>
