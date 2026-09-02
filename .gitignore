@@ -10,3 +10,9 @@ xcuserdata/
 *.secret
 dsa_priv.pem
 eddsa_priv*
+.build/
+.vscode/
+*.dmg
+*.zip
+test_runner
+/main
