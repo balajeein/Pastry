@@ -29,10 +29,10 @@ public struct TextShortcutTests {
         // ────────────────────────────────────────────────────────────────
         // TEST 1: Model creation and normalizedKey (Text & Image)
         // ────────────────────────────────────────────────────────────────
-        let textItem = TextShortcut(shortcut: "Myemail", type: .text, textContent: "balajee@gmail.com")
+        let textItem = TextShortcut(shortcut: "Myemail", type: .text, textContent: "name@example.com")
         check(textItem.shortcut == "Myemail", "TEST 1: Shortcut text must be preserved")
         check(textItem.type == .text, "TEST 1: Shortcut type must be .text")
-        check(textItem.textContent == "balajee@gmail.com", "TEST 1: textContent must be preserved")
+        check(textItem.textContent == "name@example.com", "TEST 1: textContent must be preserved")
         check(textItem.normalizedKey == "myemail", "TEST 1: normalizedKey must be lowercase")
         
         let imageItem = TextShortcut(shortcut: "sign", type: .image, imageAsset: "test-asset.png", imageName: "signature.png")
@@ -46,8 +46,8 @@ public struct TextShortcutTests {
         // TEST 2: Case-Insensitive Matching (Text & Image)
         // ────────────────────────────────────────────────────────────────
         store.resetForTesting(shortcuts: [
-            TextShortcut(shortcut: "Myemail", type: .text, textContent: "balajee@gmail.com"),
-            TextShortcut(shortcut: "Addr", type: .text, textContent: "123 ABC Street, Chennai\nIndia"),
+            TextShortcut(shortcut: "Myemail", type: .text, textContent: "name@example.com"),
+            TextShortcut(shortcut: "Addr", type: .text, textContent: "123 ABC Street, City\nCountry"),
             TextShortcut(shortcut: "sign", type: .image, imageAsset: "sig.png", imageName: "my_sig.png")
         ])
         
@@ -56,7 +56,7 @@ public struct TextShortcutTests {
             let match = store.lookup(token: testCase)
             check(match != nil, "TEST 2: lookup for '\(testCase)' must succeed")
             check(match?.type == .text, "TEST 2: type must be .text")
-            check(match?.textContent == "balajee@gmail.com", "TEST 2: replacement for '\(testCase)' must be exact")
+            check(match?.textContent == "name@example.com", "TEST 2: replacement for '\(testCase)' must be exact")
         }
         
         let imageTestCases = ["sign", "SIGN", "Sign", "sIgN"]

@@ -261,8 +261,8 @@ public class TextShortcutStore: ObservableObject {
     
     private func seedInitialShortcuts() {
         let initial = [
-            TextShortcut(shortcut: "myemail", type: .text, textContent: "balajee@gmail.com"),
-            TextShortcut(shortcut: "myphone", type: .text, textContent: "+1 (555) 019-2834")
+            TextShortcut(shortcut: "myemail", type: .text, textContent: "name@example.com"),
+            TextShortcut(shortcut: "addr", type: .text, textContent: "123 Main Street, City, Country")
         ]
         DispatchQueue.main.async {
             self.shortcuts = initial

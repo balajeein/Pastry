@@ -296,9 +296,9 @@ private struct ShortcutRowView: View {
 /// paste (⌘V), copy (⌘C), select all (⌘A), scrolling, and newlines preservation.
 public struct NativeMultilineTextEditor: NSViewRepresentable {
     @Binding var text: String
-    var placeholder: String = "e.g. balajee@gmail.com"
+    var placeholder: String = "e.g. name@example.com"
     
-    public init(text: Binding<String>, placeholder: String = "e.g. balajee@gmail.com") {
+    public init(text: Binding<String>, placeholder: String = "e.g. name@example.com") {
         self._text = text
         self.placeholder = placeholder
     }
@@ -409,7 +409,7 @@ private struct ShortcutEditorSheet: View {
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.secondary)
                 
-                TextField("e.g. Myemail or sign", text: $shortcutText)
+                TextField("e.g. myemail or sign", text: $shortcutText)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .font(.system(size: 13, design: .monospaced))
             }
@@ -434,7 +434,7 @@ private struct ShortcutEditorSheet: View {
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(.secondary)
                     
-                    NativeMultilineTextEditor(text: $replacementText, placeholder: "e.g. balajee@gmail.com")
+                    NativeMultilineTextEditor(text: $replacementText, placeholder: "e.g. name@example.com")
                         .frame(height: 120)
                         .padding(6)
                         .background(Color(NSColor.controlBackgroundColor).opacity(0.6))
