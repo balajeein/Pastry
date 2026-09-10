@@ -1,10 +1,25 @@
-<?xml version="1.0" encoding="utf-8"?>
-<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/" version="2.0">
     <channel>
         <title>Pastry Changelog</title>
         <link>https://raw.githubusercontent.com/balajeein/Pastry/main/appcast.xml</link>
         <description>Most recent updates for Pastry.</description>
         <language>en</language>
+        <item>
+            <title>2.0.1</title>
+            <pubDate>Thu, 10 Sep 2026 16:05:48 +0530</pubDate>
+            <link>https://github.com/balajeein/Pastry/releases/tag/v2.0.1</link>
+            <sparkle:version>2</sparkle:version>
+            <sparkle:shortVersionString>2.0.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>11.0</sparkle:minimumSystemVersion>
+            <description><![CDATA[<h2>What's New in Pastry 2.0.1</h2>
+<ul>
+    <li><strong>Menu Bar Shortcut Display</strong>: Displays the ⇧⌘V keyboard shortcut next to "Open Clipboard" in the menu bar dropdown.</li>
+    <li><strong>Improvements</strong>: General refinements and stability enhancements.</li>
+</ul>
+]]></description>
+            <enclosure url="https://github.com/balajeein/Pastry/releases/download/v2.0.1/Pastry-2.0.1.zip" length="2659555" type="application/octet-stream" sparkle:edSignature="eG5m9RaWq3HoYN0zTJxduW+viCgiq3Kr/4Qo6ujWb7xdkKaPWOBgJarMxVe74y5K1cA6s/zbjkpDsut5LLxTDg=="/>
+        </item>
         <item>
             <title>Pastry 2.0.0</title>
             <pubDate>Wed, 02 Sep 2026 05:00:00 +0000</pubDate>
@@ -21,11 +36,7 @@
                     <li><strong>Performance Improvements</strong>: Universal binary built natively for Apple Silicon and Intel.</li>
                 </ul>
             ]]></description>
-            <enclosure
-                url="https://github.com/balajeein/Pastry/releases/download/v2.0.0/Pastry-2.0.0.zip"
-                length="2564722"
-                type="application/octet-stream"
-                sparkle:edSignature="yGefYgfnirBmY4QCM77t0a4NaWIAV/cpUPru71s0Ms2V0+3MUzKDTjrija1wixLu6y38oqRr+h6VrpXpTeofCA==" />
+            <enclosure url="https://github.com/balajeein/Pastry/releases/download/v2.0.0/Pastry-2.0.0.zip" length="2564722" type="application/octet-stream" sparkle:edSignature="yGefYgfnirBmY4QCM77t0a4NaWIAV/cpUPru71s0Ms2V0+3MUzKDTjrija1wixLu6y38oqRr+h6VrpXpTeofCA=="/>
         </item>
     </channel>
 </rss>
