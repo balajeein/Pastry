@@ -33,7 +33,8 @@ public class MenuBarController: NSObject, NSMenuDelegate {
         titleItem.isEnabled = false
         menu.addItem(titleItem)
         
-        let openItem = NSMenuItem(title: "Open Clipboard", action: #selector(openClipboardPressed), keyEquivalent: "")
+        let openItem = NSMenuItem(title: "Open Clipboard", action: #selector(openClipboardPressed), keyEquivalent: "v")
+        openItem.keyEquivalentModifierMask = [.command, .shift]
         openItem.target = self
         menu.addItem(openItem)
         

@@ -1,193 +1,135 @@
-# Pastry — Native macOS Clipboard Manager & Math Engine
+# Pastry – Native macOS Clipboard Manager & Math Engine
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![macOS 11.0+](https://img.shields.io/badge/macOS-11.0%2B-apple.svg)](https://www.apple.com/macos/)
 [![Swift 5.0](https://img.shields.io/badge/Swift-5.0-orange.svg)](https://swift.org)
 [![Privacy: 100% Offline](https://img.shields.io/badge/Privacy-100%25%20Offline-success.svg)](#privacy--security-model)
 
-**Pastry** is a lightweight, ultra-fast, open-source macOS clipboard manager and inline mathematical evaluation tool. Designed to feel like a native macOS system utility, Pastry runs silently in your menu bar and gives you instant access to your clipboard history and real-time calculation engine via a global keyboard shortcut (`⌘⇧V`).
+**Pastry** is a lightweight, ultra‑fast, open‑source macOS clipboard manager with a built‑in math evaluation engine. It lives in the menu bar, remembers clipboard history, and evaluates mathematical expressions instantly.
 
 ---
 
 ## Features
 
-- **Native & Lightweight:** Built purely with Swift, SwiftUI, AppKit, and Carbon. Zero third-party dependencies.
-- **Menu Bar Resident:** Runs cleanly as a status bar application (`LSUIElement`) without clogging your Dock or `Cmd+Tab` switcher.
-- **Global Shortcut (`⌘⇧V`):** Summon the floating clipboard panel instantly from any application. Custom shortcuts supported.
-- **Auto-Paste Integration:** Automatically restores focus to your target application and simulates `⌘V` to paste selected history items.
-- **Built-in Hand-written Math Engine:** Instantly detects, parses, and evaluates math expressions copied to your clipboard (arithmetic, trigonometry, logarithms, equation solving, and unit conversions).
-- **Automatic Screenshot Tracking:** Detects new Desktop screenshots in real-time, displays local disk thumbnails, and indexes them into your history.
-- **Real-Time Fuzzy Search:** Search through copied text, URLs, image dimensions, and file paths with instantaneous filtering.
-- **Privacy First & Password Manager Aware:** 100% offline local processing. Automatically ignores transient/concealed pasteboard data from password managers (1Password, Bitwarden, Keychain).
-- **Adaptive Dark & Light Modes:** Dynamically matches your macOS system appearance with a glassmorphic design.
-
----
-
-## Privacy & Security Model
-
-Pastry is engineered from the ground up to respect your privacy:
-
-* **100% Offline Execution:** Zero network connections. No telemetry, no analytics, no crash reporters, no tracking SDKs.
-* **Local Storage Only:** History data is stored strictly on your local disk inside `~/Library/Application Support/Pastry/`.
-* **Sensitive Data Exclusion:** Ignores pasteboard types marked as transient or concealed (`org.nspasteboard.TransientType`, `org.nspasteboard.ConcealedType`, `com.agilebits.onepassword`).
-* **Flexible Cleanup:** Offers an optional *"Clear history on quit"* setting and instant history deletion controls.
-
----
-
-## Built-in Calculator Engine
-
-Pastry includes a custom, zero-dependency recursive descent mathematical parser and evaluator. When text containing a mathematical expression is copied or typed into Pastry, the engine automatically calculates the result.
-
-### Supported Math Syntax
-
-| Category | Supported Syntax / Functions | Example Inputs | Result |
-| :--- | :--- | :--- | :--- |
-| **Basic Arithmetic** | `+`, `-`, `*`, `/`, `%` (modulo), `^` (power), `!` (factorial) | `25 * 4`, `2^10`, `5!` | `100`, `1,024`, `120` |
-| **Parentheses & Precedence** | Standard algebraic precedence with nested parentheses | `(10 + 5) * 4 / 2` | `30` |
-| **Trigonometry** | `sin()`, `cos()`, `tan()`, `asin()`, `acos()`, `atan()` | `sin(90 deg)`, `cos(pi rad)` | `1`, `-1` |
-| **Logarithms & Exponents** | `log()`, `ln()`, `log2()`, `exp()` | `log10(1000)`, `ln(e)` | `3`, `1` |
-| **Roots & Absolute Value** | `sqrt()`, `cbrt()`, `abs()` | `sqrt(144)`, `cbrt(27)` | `12`, `3` |
-| **Equation Solving** | Linear and quadratic equation solvers | `2x + 10 = 20`, `x^2 - 9 = 0` | `x = 5`, `x = 3, -3` |
-| **Implicit Multiplication** | Omitted multiplication operators before parentheses & functions | `5(10 + 2)`, `2sin(45 deg)` | `60`, `1.414` |
-
----
-
-## User Interface & Controls
-
-| Shortcut / Action | Action Description |
-| :--- | :--- |
-| `⌘⇧V` *(default)* | Open / Close Pastry floating clipboard panel |
-| `↑` / `↓` Arrow Keys | Navigate through clipboard history items |
-| `Return` / `Enter` | Paste selected item into currently active application |
-| `⌘C` (when panel open) | Copy selected item back to active clipboard |
-| `Esc` | Close clipboard panel |
-| `Type search text` | Filter history by text content, URL host, or image properties |
-
----
-
-## Requirements
-
-* **Operating System:** macOS 11.0 (Big Sur) or later.
-* **Architectures:** Apple Silicon (`arm64`) and Intel (`x86_64`) Universal 2.
-* **Required Permissions:**
-  * **Accessibility Permission:** Required to restore focus to target applications and trigger synthesized `⌘V` paste events.
-  * **Desktop Folder Access:** Required to monitor local Desktop screenshot creation.
-
----
-
-## Installation
-
-### Pre-built Binary
-Download the latest `.dmg` release from the **[GitHub Releases](../../releases)** page:
-1. Open `Pastry.dmg`.
-2. Drag `Pastry.app` to your `Applications` folder.
-3. Launch Pastry and grant **Accessibility** permission when prompted.
-
-### Building from Source
-
-Ensure you have Xcode Command Line Tools installed (`xcode-select --install`).
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/balajeein/Pastry.git
-cd Pastry
-
-# 2. Setup local development signing identity (run once)
-./Scripts/setup-signing.sh
-
-# 3. Build debug binary and launch
-./Scripts/dev.sh
-```
-
----
-
-## Developer & Build Reference
-
-Pastry includes Makefile targets and modular shell scripts for rapid development and production builds:
-
-```bash
-make dev            # Rebuild debug binary & launch active application
-make app            # Compile optimized release build/Pastry.app
-make dmg            # Package build/Pastry.app into build/Pastry.dmg
-make run            # Launch built application
-make test           # Execute entire SwiftPM unit test suite
-```
-
-### Script Pipeline Details
-
-* [`Scripts/dev.sh`](file:///Users/balajee/Documents/projects/pastry/Scripts/dev.sh): Fast incremental debug compilation (`-Onone`, `-g`) signed with local `Pastry Dev` certificate to preserve Accessibility permissions across re-compiles.
-* [`Scripts/build.sh`](file:///Users/balajee/Documents/projects/pastry/Scripts/build.sh): Compiles Universal 2 release binary (`arm64` + `x86_64`) targeting macOS 11.0.
-* [`Scripts/release.sh`](file:///Users/balajee/Documents/projects/pastry/Scripts/release.sh): Production release pipeline requiring Apple Developer ID, performing Hardened Runtime signing, DMG packaging, Apple Notarization (`notarytool`), and Gatekeeper stapling.
-
----
-
-## Testing
-
-Pastry includes automated unit tests covering the math engine, clipboard store, deduplication, and screenshot monitoring logic.
-
-Run tests using Swift Package Manager:
-
-```bash
-swift test
-```
-
-Or run via Makefile:
-
-```bash
-make test
-```
+- **Native & Lightweight** – Pure Swift, SwiftUI, AppKit and Carbon. No third‑party dependencies.
+- **Menu‑Bar Resident** – Runs as a status‑bar app (`LSUIElement`).
+- **Global Shortcut (`⌘⇧V`)** – Open the clipboard panel from any app.
+- **Auto‑Paste** – Restores focus and simulates `⌘V` after selection.
+- **Hand‑written Math Engine** – Arithmetic, trigonometry, logarithms, equation solving, unit conversion.
+- **Screenshot Tracking** – Real‑time monitoring of Desktop screenshots.
+- **Fuzzy Search** – Instant filtering of text, URLs, images, and file paths.
+- **Privacy‑First** – 100 % offline, no telemetry, respects password‑manager data.
+- **Adaptive Dark/Light Modes** – Glassmorphic UI that follows system appearance.
 
 ---
 
 ## Project Architecture
 
-```
+```text
 Pastry/
-├── Pastry/                      # Core application source modules
-│   ├── App/                     # AppDelegate and app lifecycle coordinator
-│   ├── Calculator/              # Hand-written tokenizer, parser, AST & evaluator
-│   ├── Clipboard/               # ClipboardManager, ClipboardStore, ScreenshotMonitor
-│   ├── Hotkey/                  # GlobalHotkeyManager (Carbon hotkey registration)
-│   ├── MenuBar/                 # MenuBarController (NSStatusItem menu bar integration)
-│   ├── Panel/                   # PastryPanelController, ClipboardPanelView, ClipboardRowView
-│   ├── Paste/                   # PasteService (focus restoration & CGEvent ⌘V simulation)
-│   ├── Resources/               # Info.plist, Pastry.entitlements, AppIcon.icns
-│   ├── Settings/                # SettingsManager, SettingsView, ShortcutRecorderView
-│   ├── Storage/                 # ImageStorage (disk thumbnail & image storage)
-│   └── Utilities/               # RelativeFormatter
-├── PastryApp/                   # Application executable entry point (main.swift)
-├── Tests/                       # SwiftPM unit test target
-│   └── PastryTests/             # Calculator, Clipboard, and Screenshot test suites
-├── Scripts/                     # Modular build, development, and release scripts
+├── Pastry/                      # Core app source modules
+│   ├── App/                     # AppDelegate & lifecycle
+│   ├── Calculator/              # Tokenizer, parser, AST & evaluator
+│   ├── Clipboard/               # Clipboard manager, store, screenshot monitor
+│   ├── Hotkey/                  # Global hotkey handling (Carbon)
+│   ├── MenuBar/                 # Status‑item controller
+│   ├── Panel/                   # Clipboard panel UI
+│   ├── Paste/                   # Focus restoration & ⌘V simulation
+│   ├── Resources/               # Info.plist, entitlements, icons
+│   ├── Settings/                # Preferences UI & storage
+│   ├── Storage/                 # Image storage & thumbnails
+│   └── Utilities/               # Helper utilities
+├── PastryApp/                   # Entry point (`main.swift`)
+├── Tests/                       # SwiftPM test suite
+│   └── PastryTests/             # Calculator, clipboard, screenshot tests
+├── Scripts/                     # Build, dev, release helpers
 ├── Package.swift                # Swift Package Manager manifest
-├── Makefile                     # Shortcut build commands
-├── VERSION                      # Single source of truth for versioning
-└── README.md                    # Project documentation
+├── Makefile                     # Convenience build targets
+└── README.md                    # This documentation
+```
+
+---
+
+## Installation
+
+### Pre‑built Binary
+1. Download the latest `.dmg` from the **[GitHub Releases](https://github.com/balajeein/Pastry/releases)**.
+2. Open `Pastry.dmg` and drag `Pastry.app` into **Applications**.
+3. Launch Pastry and grant **Accessibility** permission when prompted.
+
+### Build from Source
+```bash
+# Clone the repo
+git clone https://github.com/balajeein/Pastry.git
+cd Pastry
+
+# Install Xcode command‑line tools (if not already present)
+xcode-select --install
+
+# Set up a local signing identity (run once)
+./Scripts/setup-signing.sh
+
+# Build and launch a debug version
+./Scripts/dev.sh
+```
+
+You can also use the Makefile shortcuts:
+```bash
+make dev   # Rebuild debug binary & launch
+make app   # Build optimized release app
+make dmg   # Package `Pastry.app` into a DMG
+make test  # Run the SwiftPM test suite
+```
+
+---
+
+## Usage
+
+- **Open Clipboard Panel** – Press `⌘⇧V` (default) from any app.
+- **Navigate** – Use `↑` / `↓` arrows to browse history.
+- **Paste** – Press `Enter` to paste the selected item.
+- **Copy Back** – `⌘C` while the panel is open copies the item back to the clipboard.
+- **Search** – Type to filter by text, URL, image dimensions, or file path.
+- **Math Evaluation** – Copy a mathematical expression; the built‑in engine evaluates it instantly and shows the result.
+
+---
+
+## Testing
+
+```bash
+# Swift Package Manager
+swift test
+
+# Or via Makefile
+make test
 ```
 
 ---
 
 ## Contributing
 
-Contributions are welcome! If you find a bug or have a feature request:
-
+Please read the full guidelines in [`CONTRIBUTING.md`](CONTRIBUTING.md). In short:
 1. Fork the repository.
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`).
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`).
+2. Create a feature branch (`git checkout -b feature/YourFeature`).
+3. Commit your changes.
 4. Ensure all tests pass (`swift test`).
-5. Push to the branch (`git push origin feature/AmazingFeature`).
-6. Open a Pull Request.
+5. Push and open a Pull Request.
 
 ---
 
 ## License
 
-Pastry is free and open-source software licensed under the
-GNU General Public License v3.0 or later.
+Pastry is licensed under the **GNU General Public License v3.0** or later. See the [LICENSE](LICENSE) file for details.
 
-See the [LICENSE](LICENSE) file for the full license.
+---
 
-## Branding
+## Privacy & Security Model
 
-The Pastry name, logo, icons, and other branding are not licensed
-under the GPL unless explicitly stated otherwise.
+- **100 % Offline** – No network connections, telemetry, or crash reporters.
+- **Local Storage** – History stored in `~/Library/Application Support/Pastry/`.
+- **Sensitive Data Exclusion** – Automatically ignores transient or concealed pasteboard types (e.g., 1Password, Bitwarden).
+- **Optional History Clearing** – Settings allow clearing history on quit or manual deletion.
+
+---
+
+*For more details, explore the source code under `Pastry/` or the documentation in the `Scripts/` directory.*
