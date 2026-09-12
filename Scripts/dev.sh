@@ -73,6 +73,7 @@ build_debug() {
         cp -u "$PROJECT_DIR/Pastry/Resources/AppIcon.icns" "$RESOURCES_DIR/AppIcon.icns" 2>/dev/null \
             || cp "$PROJECT_DIR/Pastry/Resources/AppIcon.icns" "$RESOURCES_DIR/AppIcon.icns"
     fi
+    cp "$PROJECT_DIR/Pastry/Resources/"*.png "$RESOURCES_DIR/" 2>/dev/null || true
 
     # Code sign — use persistent "Pastry Dev" cert so TCC permissions survive rebuilds.
     if security find-identity -v -p codesigning 2>/dev/null | grep -q "Pastry Dev"; then

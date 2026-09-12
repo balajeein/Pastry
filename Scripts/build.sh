@@ -62,6 +62,7 @@ rm -f "$MACOS_DIR/Pastry-arm64" "$MACOS_DIR/Pastry-x86_64"
 if [ -f "$PROJECT_DIR/Pastry/Resources/AppIcon.icns" ]; then
     cp "$PROJECT_DIR/Pastry/Resources/AppIcon.icns" "$RESOURCES_DIR/AppIcon.icns"
 fi
+cp "$PROJECT_DIR/Pastry/Resources/"*.png "$RESOURCES_DIR/" 2>/dev/null || true
 
 # Code sign — use Developer ID Application if present, else Pastry Dev, else ad-hoc
 if security find-identity -v -p codesigning 2>/dev/null | grep -q "Developer ID Application"; then
